@@ -27,20 +27,22 @@ export function RepoHealthGrid({ repos, loading }: RepoHealthGridProps) {
       </div>
 
       {loading || !repos ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="h-24 animate-pulse rounded-lg bg-white/5"
+              className="h-20 animate-pulse rounded-lg bg-white/5"
             />
           ))}
         </div>
       ) : repos.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          No repositories connected yet
-        </p>
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <CheckCircle2 className="mb-3 size-10 text-emerald-400/50" />
+          <p className="text-sm">No repositories connected yet</p>
+          <p className="text-xs">Connect repos in Settings to start monitoring</p>
+        </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-2">
           {repos.map((repo, i) => {
             const st = statusIcons[repo.status];
             const StatusIcon = st.icon;
@@ -48,26 +50,28 @@ export function RepoHealthGrid({ repos, loading }: RepoHealthGridProps) {
             return (
               <motion.div
                 key={repo.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05 }}
               >
                 <Link
                   href={`/projects?highlight=${repo.fullName}`}
-                  className="block rounded-lg border border-white/5 bg-white/[0.02] p-4 transition-all hover:border-white/10 hover:bg-white/[0.04]"
+                  className="group flex items-center gap-4 rounded-lg border border-white/5 bg-white/[0.02] px-4 py-3 transition-all hover:border-white/10 hover:bg-white/[0.04]"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`rounded-md p-1.5 ${st.bg}`}>
-                      <StatusIcon className={`size-3.5 ${st.color}`} />
-                    </div>
-                    <span className="truncate text-sm font-medium">
-                      {repo.name}
+                  <div className={`rounded-md p-1.5 ${st.bg}`}>
+                    <StatusIcon className={`size-4 ${st.color}`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{repo.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {repo.totalFixes} fixes · {repo.successRate.toFixed(0)}% success
+                    </p>
+                  </div>
+                  {repo.openIssues > 0 && (
+                    <span className="shrink-0 rounded-full bg-red-400/10 px-2 py-0.5 text-[10px] font-medium text-red-400">
+                      {repo.openIssues} open
                     </span>
-                  </div>
-                  <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
-                    <span>{repo.successRate.toFixed(0)}% success</span>
-                    <span>{repo.totalFixes} fixes</span>
-                  </div>
+                  )}
                 </Link>
               </motion.div>
             );

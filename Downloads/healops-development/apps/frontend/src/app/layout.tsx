@@ -3,7 +3,7 @@ import "./globals.css";
 import { satoshi } from "@/app/_config/fonts";
 import { metadata } from "@/app/_config/metadata";
 import { viewport } from "@/app/_config/viewport";
-import { OrgProvider } from "@/app/_libs/context/OrgContext";
+import { Providers } from "@/app/_components/Providers";
 
 export { metadata, viewport };
 
@@ -15,11 +15,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${satoshi.variable} font-sans antialiased`}>
-        <OrgProvider>
+        <Providers>
           <div className="flex h-screen bg-background bg-grid-pattern bg-ambient-glow overflow-hidden">
             {children}
           </div>
-        </OrgProvider>
+        </Providers>
       </body>
     </html>
   );

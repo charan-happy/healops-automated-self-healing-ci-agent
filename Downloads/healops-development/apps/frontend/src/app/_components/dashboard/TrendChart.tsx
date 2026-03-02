@@ -63,7 +63,7 @@ export function TrendChart({ data, loading, onPeriodChange }: TrendChartProps) {
       {loading || !data ? (
         <div className="h-64 animate-pulse rounded-lg bg-white/5" />
       ) : (
-        <ResponsiveContainer width="100%" height={280}>
+        <ResponsiveContainer width="100%" height={340}>
           <AreaChart
             data={data}
             margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
