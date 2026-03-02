@@ -45,7 +45,7 @@ const REFRESH_TOKEN_KEY = "healops_refresh_token";
 const USER_KEY = "healops_user";
 
 // Public routes that don't need auth
-const PUBLIC_PATHS = ["/login", "/register", "/pricing", "/unauthorized", "/auth/callback"];
+const PUBLIC_PATHS = ["/login", "/register", "/pricing", "/unauthorized", "/auth/callback", "/onboarding"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
@@ -108,6 +108,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Demo session — restore from localStorage without API call
+      if (refreshToken === "demo-refresh") {
+        setAccessToken("demo-token");
+        if (savedUser) {
+          setUser(JSON.parse(savedUser) as AuthUser);
+        } else {
+          setUser({ email: "demo@healops.dev", firstName: "Demo", lastName: "User" });
+        }
+        setLoading(false);
+        return;
+      }
+
       try {
         const tokens = await refreshTokenApi(refreshToken);
         handleTokens(tokens);
@@ -123,11 +135,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     restoreSession();
   }, [handleTokens, clearAuth]);
 
-  // Auto-refresh token before expiry
+  // Auto-refresh token before expiry (skip for demo sessions)
   useEffect(() => {
     const interval = setInterval(async () => {
       const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-      if (!refreshToken) return;
+      if (!refreshToken || refreshToken === "demo-refresh") return;
       try {
         const tokens = await refreshTokenApi(refreshToken);
         handleTokens(tokens);
@@ -201,22 +213,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user, loading, login, register, demoLogin, logout],
   );
 
-  // Show nothing while restoring session (avoids flash)
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="size-8 animate-spin rounded-full border-2 border-brand-cyan border-t-transparent" />
-      </div>
-    );
-  }
-
-  // On public paths, always render (login/register pages need to show)
-  // On private paths, only render if authenticated
-  if (!user && !isPublicPath(pathname)) {
-    return null;
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // Always provide the context — loading/auth checks happen per-route, not here
+  // This ensures layouts (sidebar, etc.) can always access auth state
+  return (
+    <AuthContext.Provider value={value}>
+      {loading ? (
+        <div className="flex h-screen items-center justify-center bg-background">
+          <div className="flex flex-col items-center gap-3">
+            <div className="size-8 animate-spin rounded-full border-2 border-brand-cyan border-t-transparent" />
+            <p className="text-xs text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      ) : !user && !isPublicPath(pathname) ? (
+        // Redirecting to login — show nothing
+        null
+      ) : (
+        children
+      )}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {
