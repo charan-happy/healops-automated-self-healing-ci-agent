@@ -6,30 +6,48 @@ import BranchList from "../_components/BranchList";
 import PageTransition from "../_components/PageTransition";
 import { GitBranch, Loader2, Search } from "lucide-react";
 import { fetchBranches } from "../_libs/github/github-service";
+import { mockBranches } from "../_libs/mockData";
 import type { Branch } from "../_libs/mockData";
+
+const DEMO_BRANCHES: Record<string, Branch[]> = {
+  ...mockBranches,
+  "5": [
+    { id: "main", name: "main", author: "nagacharan", commitCount: 42, lastCommit: "5 min ago", pipelineStatus: "success" },
+    { id: "feature/fallback-chain", name: "feature/fallback-chain", author: "nagacharan", commitCount: 8, lastCommit: "2 hours ago", pipelineStatus: "fixed" },
+  ],
+  "6": [
+    { id: "main", name: "main", author: "devops-bot", commitCount: 120, lastCommit: "30 min ago", pipelineStatus: "success" },
+  ],
+};
 
 const BranchesPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("projectId");
 
-  const [owner, repo] = projectId ? projectId.split("--") : [null, null];
+  const [owner, repo] = projectId?.includes("--") ? projectId.split("--") : [null, null];
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!owner || !repo) {
+      // Demo mode — use mock branches for simple IDs
+      if (projectId) {
+        setBranches(DEMO_BRANCHES[projectId] ?? []);
+      }
       setLoading(false);
       return;
     }
     fetchBranches(owner, repo)
       .then(setBranches)
-      .catch((err) => setError(err.message))
+      .catch(() => {
+        if (projectId) setBranches(DEMO_BRANCHES[projectId] ?? []);
+      })
       .finally(() => setLoading(false));
-  }, [owner, repo]);
+  }, [owner, repo, projectId]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return branches;
