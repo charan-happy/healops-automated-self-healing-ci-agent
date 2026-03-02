@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -10,28 +10,45 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Wrench } from "lucide-react";
+
+const pageNames: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/projects": "Projects",
+  "/branches": "Branches",
+  "/commits": "Commits",
+  "/fix-details": "Fix Details",
+  "/settings": "Settings",
+  "/settings/organization": "Organization",
+  "/settings/ci-providers": "CI Providers",
+  "/settings/ai-config": "AI Config",
+  "/settings/billing": "Billing",
+  "/settings/notifications": "Notifications",
+  "/settings/api-keys": "API Keys",
+};
 
 const AppBreadcrumb = () => {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
   const branchId = searchParams.get("branchId");
   const commitId = searchParams.get("commitId");
 
-  // Derive display names from query params
   const repoName = projectId ? projectId.split("--")[1] ?? projectId : null;
+  const currentPage = pageNames[pathname] ?? pathname.split("/").pop() ?? "";
 
   return (
-    <div className="relative z-20 border-b border-white/[0.06] bg-card/60 backdrop-blur-xl px-6 py-3">
-      <Breadcrumb>
-        <BreadcrumbList>
+    <Breadcrumb>
+      <BreadcrumbList>
           <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href="/" className="flex items-center gap-1.5">
-                <Wrench size={14} className="text-brand-cyan" />
-                <span className="font-bold">Healops</span>
-              </Link>
-            </BreadcrumbLink>
+            {projectId ? (
+              <BreadcrumbLink asChild>
+                <Link href={(pathname.split("?")[0] ?? pathname) as "/dashboard"}>{currentPage}</Link>
+              </BreadcrumbLink>
+            ) : (
+              <BreadcrumbPage className="text-sm font-medium">
+                {currentPage}
+              </BreadcrumbPage>
+            )}
           </BreadcrumbItem>
 
           {projectId && (
@@ -39,7 +56,7 @@ const AppBreadcrumb = () => {
               <BreadcrumbSeparator />
               <BreadcrumbItem>
                 {!branchId ? (
-                  <BreadcrumbPage>{repoName}</BreadcrumbPage>
+                  <BreadcrumbPage className="text-sm font-medium">{repoName}</BreadcrumbPage>
                 ) : (
                   <BreadcrumbLink asChild>
                     <Link href={`/branches?projectId=${projectId}`}>{repoName}</Link>
@@ -73,13 +90,14 @@ const AppBreadcrumb = () => {
             <>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbPage className="text-sm font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 py-0.5 rounded">{commitId.slice(0, 7)}</BreadcrumbPage>
+                <BreadcrumbPage className="text-sm font-bold text-brand-cyan bg-brand-cyan/10 px-1.5 py-0.5 rounded">
+                  {commitId.slice(0, 7)}
+                </BreadcrumbPage>
               </BreadcrumbItem>
             </>
           )}
         </BreadcrumbList>
       </Breadcrumb>
-    </div>
   );
 };
 

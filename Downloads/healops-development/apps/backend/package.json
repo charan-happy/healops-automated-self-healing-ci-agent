@@ -79,7 +79,6 @@
     "postinstall": "echo 'Dependencies installed successfully'"
   },
   "dependencies": {
-    "adm-zip": "0.5.16",
     "@anthropic-ai/sdk": "0.78.0",
     "@aws-sdk/client-s3": "3.892.0",
     "@aws-sdk/client-ses": "3.995.0",
@@ -118,6 +117,7 @@
     "@opentelemetry/resources": "2.1.0",
     "@opentelemetry/sdk-node": "0.205.0",
     "@willsoto/nestjs-prometheus": "6.0.2",
+    "adm-zip": "0.5.16",
     "axios": "1.13.5",
     "bcrypt": "6.0.0",
     "body-parser": "2.2.0",
@@ -161,6 +161,7 @@
     "rxjs": "7.8.2",
     "sanitize-html": "2.17.0",
     "socket.io": "4.8.3",
+    "stripe": "20.4.0",
     "twilio": "5.12.2",
     "ua-parser-js": "1.0.41",
     "uuid": "8.3.2",

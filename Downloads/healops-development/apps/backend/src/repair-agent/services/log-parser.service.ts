@@ -160,7 +160,7 @@ export class LogParserService {
       { regex: /npm\s+audit.*vulnerabilit|snyk\s+(?:test|found).*issue|CVE-\d{4}-\d+|(?:high|critical)\s+severity\s+vulnerabilit|dependabot\s+alert/i, code: 'SECURITY_VULNERABILITY' },
 
       // Import/export errors
-      { regex: /Cannot\s+find\s+module|ModuleNotFoundError|No\s+module\s+named|TS2307/i, code: 'IMPORT_ERROR' },
+      { regex: /Cannot\s+find\s+module|ModuleNotFoundError|No\s+module\s+named|TS2307|cannot find symbol|error\[E0432\]|error CS0234|LoadError|No such module|Unresolved reference/i, code: 'IMPORT_ERROR' },
       { regex: /TS2305|has\s+no\s+exported\s+member|is\s+not\s+exported|no\s+default\s+export/i, code: 'EXPORT_ERROR' },
 
       // Build/config errors (NestJS DI, decorators)
@@ -169,10 +169,10 @@ export class LogParserService {
 
       // Type system errors
       { regex: /interface.*missing\s+propert|property.*is\s+required|DTO\s+.*mismatch|Object\s+literal\s+may\s+only\s+specify/i, code: 'DTO_INTERFACE_ERROR' },
-      { regex: /TS2339|TS2345|TS2322|TS2552|TS7006|TS18048|TS2532|type\s+['"].*['"]\s+is\s+not\s+assignable|Property\s+['"].*['"]\s+does\s+not\s+exist|implicit\s+.*any/i, code: 'TYPE_ERROR' },
+      { regex: /TS2339|TS2345|TS2322|TS2552|TS7006|TS18048|TS2532|type\s+['"].*['"]\s+is\s+not\s+assignable|Property\s+['"].*['"]\s+does\s+not\s+exist|implicit\s+.*any|error\[E0308\]|mismatched types|error CS0029|incompatible types/i, code: 'TYPE_ERROR' },
 
       // Syntax errors
-      { regex: /SyntaxError|Unexpected\s+token|Parse\s+error|missing\s+(?:closing\s+)?(?:semicolon|brace|bracket|paren)/i, code: 'SYNTAX_ERROR' },
+      { regex: /SyntaxError|Unexpected\s+token|Parse\s+error|missing\s+(?:closing\s+)?(?:semicolon|brace|bracket|paren)|PHP Parse error|syntax error, unexpected|error\[E0658\]/i, code: 'SYNTAX_ERROR' },
 
       // Test-related errors
       { regex: /timeout.*async\s+callback|exceeded\s+timeout\s+of\s+\d+ms|did\s+not\s+exit.*after.*test|Async\s+.*timed\s+out|Vitest\s+timeout/i, code: 'TEST_TIMEOUT' },
@@ -404,6 +404,21 @@ export class LogParserService {
       // Monorepo
       /project graph.*fail/i,
       /workspace.*not found/i,
+      // Java errors
+      /java\.lang\.\w+Exception:/,
+      /^\s+at\s+[\w.]+\([\w.]+:\d+\)/,
+      // Rust compiler errors
+      /error\[E\d{4}\]:/,
+      // C# compiler errors
+      /error CS\d{4}:/,
+      // Ruby errors
+      /NameError:|NoMethodError:|LoadError:/,
+      // PHP errors
+      /PHP\s+(?:Parse|Fatal)\s+error:/i,
+      // Kotlin errors
+      /error:\s+unresolved reference:/i,
+      // Swift errors
+      /\.swift:\d+:\d+:\s+error:/,
     ];
     return errorPatterns.some((p) => p.test(line));
   }
@@ -416,10 +431,15 @@ export class LogParserService {
     if (/\.java$/.test(filePath)) return 'java';
     if (/\.rs$/.test(filePath)) return 'rust';
     if (/\.cs$/.test(filePath)) return 'csharp';
+    if (/\.rb$/.test(filePath)) return 'ruby';
+    if (/\.php$/.test(filePath)) return 'php';
+    if (/\.(kt|kts)$/.test(filePath)) return 'kotlin';
+    if (/\.swift$/.test(filePath)) return 'swift';
+    if (/\.(cpp|cc|cxx|c|h|hpp)$/.test(filePath)) return 'cpp';
     if (/\.(css|scss|sass|less)$/.test(filePath)) return 'css';
     if (/\.(graphql|gql)$/.test(filePath)) return 'graphql';
     if (/\.(yml|yaml)$/.test(filePath)) return 'yaml';
     if (/Dockerfile/.test(filePath)) return 'docker';
-    return 'typescript';
+    return 'unknown';
   }
 }
