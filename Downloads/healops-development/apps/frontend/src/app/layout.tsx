@@ -14,11 +14,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${satoshi.variable} font-sans antialiased`}>
+      <body className={`${satoshi.variable} font-sans antialiased bg-background`}>
         <Providers>
-          <div className="flex h-screen bg-background bg-grid-pattern bg-ambient-glow overflow-hidden">
-            {children}
-          </div>
+          {children}
         </Providers>
       </body>
     </html>
