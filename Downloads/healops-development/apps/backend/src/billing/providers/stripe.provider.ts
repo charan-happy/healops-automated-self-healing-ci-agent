@@ -7,11 +7,24 @@ import Stripe from 'stripe';
 
 @Injectable()
 export class StripeProvider {
-  private readonly stripe: Stripe;
+  private readonly stripe: Stripe | null;
   private readonly logger = new Logger(StripeProvider.name);
 
   constructor(private readonly configService: ConfigService) {
-    this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY') ?? '');
+    const apiKey = this.configService.get('STRIPE_SECRET_KEY');
+    if (apiKey) {
+      this.stripe = new Stripe(apiKey);
+    } else {
+      this.stripe = null;
+      this.logger.warn('STRIPE_SECRET_KEY is not configured. Billing features will be unavailable.');
+    }
+  }
+
+  private getStripe(): Stripe {
+    if (!this.stripe) {
+      throw new Error('Stripe is not configured. Set STRIPE_SECRET_KEY environment variable.');
+    }
+    return this.stripe;
   }
 
   /**
@@ -23,7 +36,7 @@ export class StripeProvider {
     metadata: Record<string, string>,
   ): Promise<Stripe.Customer> {
     this.logger.debug(`Creating Stripe customer for ${email}`);
-    return this.stripe.customers.create({ email, name, metadata });
+    return this.getStripe().customers.create({ email, name, metadata });
   }
 
   /**
@@ -35,7 +48,7 @@ export class StripeProvider {
     successUrl: string,
     cancelUrl: string,
   ): Promise<Stripe.Checkout.Session> {
-    return this.stripe.checkout.sessions.create({
+    return this.getStripe().checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
@@ -51,7 +64,7 @@ export class StripeProvider {
     customerId: string,
     returnUrl: string,
   ): Promise<Stripe.BillingPortal.Session> {
-    return this.stripe.billingPortal.sessions.create({
+    return this.getStripe().billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,
     });
@@ -66,7 +79,7 @@ export class StripeProvider {
     stripeCustomerId: string,
     value: number,
   ): Promise<void> {
-    await this.stripe.billing.meterEvents.create({
+    await this.getStripe().billing.meterEvents.create({
       event_name: eventName,
       payload: {
         stripe_customer_id: stripeCustomerId,
@@ -84,6 +97,6 @@ export class StripeProvider {
    */
   constructWebhookEvent(body: Buffer, signature: string): Stripe.Event {
     const webhookSecret = this.configService.get('STRIPE_WEBHOOK_SECRET') ?? '';
-    return this.stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    return this.getStripe().webhooks.constructEvent(body, signature, webhookSecret);
   }
 }
