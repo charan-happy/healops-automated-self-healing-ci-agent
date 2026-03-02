@@ -337,6 +337,93 @@ export async function configureLlm(data: {
   }
 }
 
+// ─── CI Provider Settings API ────────────────────────────────────────────────
+
+import type { CIProviderConfig } from "./types/settings";
+
+export interface CiProviderCreatePayload {
+  provider: string;
+  githubInstallationId?: string;
+  accessToken?: string;
+  serverUrl?: string;
+  displayName?: string;
+}
+
+export interface CiProviderUpdatePayload {
+  isActive?: boolean;
+  accessToken?: string;
+  serverUrl?: string;
+  displayName?: string;
+}
+
+export interface AvailableRepo {
+  externalRepoId: string;
+  name: string;
+  defaultBranch: string;
+  language?: string;
+  provider: string;
+  providerConfigId: string;
+}
+
+export async function fetchCiProviders(): Promise<CIProviderConfig[] | null> {
+  return fetchApi<CIProviderConfig[]>("/v1/healops/settings/ci-providers");
+}
+
+export async function addCiProvider(
+  data: CiProviderCreatePayload,
+): Promise<{ providerConfigId: string; provider: string } | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/ci-providers`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<{ providerConfigId: string; provider: string }>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateCiProvider(
+  id: string,
+  data: CiProviderUpdatePayload,
+): Promise<CIProviderConfig | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/ci-providers/${id}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<CIProviderConfig>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteCiProvider(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/ci-providers/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchAvailableRepos(
+  providerConfigId: string,
+): Promise<AvailableRepo[] | null> {
+  return fetchApi<AvailableRepo[]>(
+    `/v1/healops/settings/ci-providers/${providerConfigId}/repos`,
+  );
+}
+
 // ─── Billing API ────────────────────────────────────────────────────────────
 
 import type { BillingPlan, Subscription, UsageStats } from "./types/settings";

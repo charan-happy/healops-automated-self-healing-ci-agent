@@ -42,6 +42,14 @@ export class HealopsAuditLogRepository {
       .limit(limit);
   }
 
+  async findByAction(action: string) {
+    return this.dbService.db
+      .select()
+      .from(healopsAuditLogs)
+      .where(eq(healopsAuditLogs.action, action))
+      .orderBy(desc(healopsAuditLogs.createdAt));
+  }
+
   // ─── Slack Notifications ──────────────────────────────────────────────
 
   async createSlackNotification(data: typeof slackNotifications.$inferInsert) {

@@ -6,6 +6,8 @@ export interface Project {
   repo: string;
   branchCount: number;
   lastActivity: string;
+  /** CI provider: github, gitlab, bitbucket, jenkins */
+  provider?: string;
 }
 
 export interface Branch {

@@ -37,4 +37,5 @@ export enum RouteNames {
   HEALOPS_DASHBOARD = 'healops/dashboard',
   HEALOPS_ONBOARDING = 'healops/onboarding',
   HEALOPS_BILLING = 'healops/billing',
+  HEALOPS_SETTINGS = 'healops/settings',
 }
