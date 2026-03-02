@@ -1,0 +1,93 @@
+name: Build
+
+on:
+  push:
+    branches:
+      # - main
+      - development
+      - feat/pipeline-events-fe
+  pull_request:
+    branches:
+      # - main
+      - development
+      - feat/pipeline-events-fe
+  workflow_dispatch:
+
+jobs:
+  build-api:
+    name: Build Backend API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build Backend
+        run: pnpm run backend:build
+
+      - name: Upload Backend build artifacts
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: backend-build
+          path: dist/apps/backend
+          retention-days: 1
+
+  build-web:
+    name: Build Frontend Web
+    runs-on: ubuntu-latest
+    needs: build-api
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Frontend
+        run: pnpm run frontend:build
+
+      - name: Upload Frontend build artifacts
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: frontend-build
+          path: dist/apps/frontend
+          retention-days: 1
+
+      - name: Notify Slack (Build Complete)
+        if: always()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "Build: ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Build Workflows*\n*Status:* ${{ job.status == 'success' && '✅ PASSED' || '❌ FAILED' }}\n*Branch:* development\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
+                  }
+                }
+              ]
+            }

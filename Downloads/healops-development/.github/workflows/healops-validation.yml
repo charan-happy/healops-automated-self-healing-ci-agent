@@ -1,0 +1,130 @@
+name: HealOps Validation
+
+on:
+  push:
+    branches:
+      - "healops/fix/**"
+
+# Cancel older validation runs on the same fix branch when a new commit is pushed.
+# Prevents race conditions where commit N and N+1 validate simultaneously and
+# results arrive out of order, confusing the agent about which fix worked.
+concurrency:
+  group: healops-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-language:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      language: ${{ steps.detect.outputs.language }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        run: |
+          if [ -f "package-lock.json" ] || [ -f "yarn.lock" ] || [ -f "pnpm-lock.yaml" ]; then
+            echo "language=typescript" >> $GITHUB_OUTPUT
+          elif [ -f "Pipfile.lock" ] || [ -f "requirements.txt" ]; then
+            echo "language=python" >> $GITHUB_OUTPUT
+          elif [ -f "go.sum" ]; then
+            echo "language=go" >> $GITHUB_OUTPUT
+          else
+            echo "language=typescript" >> $GITHUB_OUTPUT
+          fi
+
+  validate-typescript:
+    needs: detect-language
+    if: needs.detect-language.outputs.language == 'typescript'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: pkg-manager
+        run: |
+          if [ -f "pnpm-lock.yaml" ]; then
+            echo "manager=pnpm" >> $GITHUB_OUTPUT
+          elif [ -f "yarn.lock" ]; then
+            echo "manager=yarn" >> $GITHUB_OUTPUT
+          else
+            echo "manager=npm" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.pkg-manager.outputs.manager == 'pnpm'
+        with:
+          version: 10.26.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: |
+          if [ "${{ steps.pkg-manager.outputs.manager }}" = "pnpm" ]; then
+            pnpm install --frozen-lockfile
+          elif [ "${{ steps.pkg-manager.outputs.manager }}" = "yarn" ]; then
+            yarn install --frozen-lockfile
+          else
+            npm ci
+          fi
+
+      - run: npx tsc --noEmit
+      - name: Run tests
+        run: |
+          if [ "${{ steps.pkg-manager.outputs.manager }}" = "pnpm" ]; then
+            pnpm test
+          elif [ "${{ steps.pkg-manager.outputs.manager }}" = "yarn" ]; then
+            yarn test
+          else
+            npm test
+          fi
+      - run: npm audit --audit-level=high
+        continue-on-error: true
+
+  validate-python:
+    needs: detect-language
+    if: needs.detect-language.outputs.language == 'python'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - run: python -m pytest
+
+  validate-go:
+    needs: detect-language
+    if: needs.detect-language.outputs.language == 'go'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+      - run: go build ./...
+      - run: go test ./...
+
+  notify-healops:
+    needs: [validate-typescript, validate-python, validate-go]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Notify HealOps of result
+        run: |
+          STATUS="success"
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            STATUS="failure"
+          fi
+          curl -X POST "${{ secrets.HEALOPS_PUBLIC_URL }}/v1/healops/webhooks/validation-complete" \
+            -H "Authorization: Bearer ${{ secrets.HEALOPS_WEBHOOK_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"branch\":\"${{ github.ref_name }}\",\"status\":\"$STATUS\",\"run_id\":\"${{ github.run_id }}\",\"conclusion\":\"$STATUS\",\"sha\":\"${{ github.sha }}\"}"

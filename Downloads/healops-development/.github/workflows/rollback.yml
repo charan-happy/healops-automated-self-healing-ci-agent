@@ -1,0 +1,208 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to rollback to (e.g., sha-abc1234 or latest)'
+        required: true
+        type: string
+      services:
+        description: 'Services to rollback (comma-separated: backend,worker,frontend or "all")'
+        required: true
+        default: 'all'
+        type: string
+      skip_migrations:
+        description: 'Skip database migrations (useful for quick rollback)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/healops-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/healops-frontend
+
+jobs:
+  rollback:
+    name: Rollback to ${{ inputs.image_tag }}
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate image tag exists
+        run: |
+          # Login to GHCR to check image existence
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          
+          # Check if backend image exists
+          if docker manifest inspect ${{ env.BACKEND_IMAGE }}:${{ inputs.image_tag }} > /dev/null 2>&1; then
+            echo "✅ Backend image ${{ inputs.image_tag }} exists"
+          else
+            echo "❌ Backend image ${{ inputs.image_tag }} not found in registry"
+            exit 1
+          fi
+          
+          # Check if frontend image exists
+          if docker manifest inspect ${{ env.FRONTEND_IMAGE }}:${{ inputs.image_tag }} > /dev/null 2>&1; then
+            echo "✅ Frontend image ${{ inputs.image_tag }} exists"
+          else
+            echo "❌ Frontend image ${{ inputs.image_tag }} not found in registry"
+            exit 1
+          fi
+
+      - name: Copy docker-compose-prod.yml to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: apps/backend/docker-compose-prod.yml
+          target: /home/ubuntu/healops
+          strip_components: 2
+
+      - name: Rollback on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/ubuntu/healops
+
+            IMAGE_TAG="${{ inputs.image_tag }}"
+            SERVICES="${{ inputs.services }}"
+            SKIP_MIGRATIONS="${{ inputs.skip_migrations }}"
+
+            echo "🔄 Rolling back to image tag: ${IMAGE_TAG}"
+            echo "📦 Services: ${SERVICES}"
+
+            # Login to GHCR on EC2
+            echo "${{ secrets.GITHUB_TOKEN }}" | \
+              docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Update image tags in .env
+            sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:${IMAGE_TAG}|" .env
+            sed -i "s|^FRONTEND_IMAGE=.*|FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:${IMAGE_TAG}|" .env
+
+            # Pull rollback images
+            BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:${IMAGE_TAG} \
+            FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:${IMAGE_TAG} \
+              docker compose -f docker-compose-prod.yml pull
+
+            # Run migrations unless skipped
+            if [ "$SKIP_MIGRATIONS" != "true" ]; then
+              echo "📊 Running database migrations..."
+              docker compose -f docker-compose-prod.yml run --rm backend \
+                sh -c "pnpm db:migrate"
+            else
+              echo "⏭️  Skipping database migrations"
+            fi
+
+            # Determine which services to rollback
+            if [ "$SERVICES" = "all" ]; then
+              ROLLBACK_SERVICES="backend worker frontend"
+            else
+              ROLLBACK_SERVICES=$(echo "$SERVICES" | tr ',' ' ')
+            fi
+
+            echo "🔄 Rolling back services: ${ROLLBACK_SERVICES}"
+
+            # Rolling restart of specified services
+            BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:${IMAGE_TAG} \
+            FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:${IMAGE_TAG} \
+              docker compose -f docker-compose-prod.yml up -d \
+              --no-deps ${ROLLBACK_SERVICES}
+
+            # Health check
+            echo "⏳ Waiting for services to stabilize..."
+            sleep 25
+
+            if curl -sf http://localhost:4000/health > /dev/null 2>&1; then
+              echo "✅ Backend health check passed"
+            else
+              echo "❌ Backend health check failed - rollback may be incomplete"
+              docker compose -f docker-compose-prod.yml logs --tail=50 backend
+              exit 1
+            fi
+
+            if echo "$ROLLBACK_SERVICES" | grep -q "frontend"; then
+              if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+                echo "✅ Frontend health check passed"
+              else
+                echo "⚠️  Frontend health check failed"
+                docker compose -f docker-compose-prod.yml logs --tail=50 frontend
+              fi
+            fi
+
+            # Show current state
+            echo ""
+            echo "📊 Current deployment state:"
+            docker compose -f docker-compose-prod.yml ps
+
+            # Cleanup old images
+            docker image prune -f
+
+      - name: Notify Slack (Rollback Success)
+        if: success()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "🔄 Rollback Success",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "✅ *Rollback to EC2 - SUCCESS*\n*Image Tag:* `${{ inputs.image_tag }}`\n*Services:* ${{ inputs.services }}\n*Triggered by:* ${{ github.actor }}\n*Host:* ${{ secrets.EC2_HOST }}"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify Slack (Rollback Failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "🚨 Rollback Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ *Rollback to EC2 - FAILED*\n*Image Tag:* `${{ inputs.image_tag }}`\n*Services:* ${{ inputs.services }}\n*Triggered by:* ${{ github.actor }}\n*Action Required:* Manual intervention needed\n*View:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Workflow Run>"
+                  }
+                }
+              ]
+            }
+
+  list-available-tags:
+    name: List Available Image Tags
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: List recent backend image tags
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          
+          echo "📦 Recent backend image tags:"
+          # This requires GitHub CLI or API access
+          # For now, provide instructions
+          echo "To list all available tags, run:"
+          echo "  gh api /orgs/${{ github.repository_owner }}/packages/container/healops-backend/versions"
+          echo ""
+          echo "Common rollback targets:"
+          echo "  - latest       (most recent production deploy)"
+          echo "  - sha-XXXXXXX  (specific commit)"
+          echo "  - dev          (development branch)"

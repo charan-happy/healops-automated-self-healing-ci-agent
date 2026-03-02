@@ -1,0 +1,423 @@
+/* ============================= */
+/* Tailwind v4 Core */
+/* ============================= */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+@plugin "@tailwindcss/forms";
+
+/* Dark variant */
+@custom-variant dark (&:is(.dark *));
+
+/* ============================= */
+/* Theme Mapping */
+/* ============================= */
+
+@theme inline {
+  /* Semantic colors */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Brand palette — use as bg-brand-primary, text-brand-cyan, etc. */
+  --color-brand-primary: #4A90E2;
+  --color-brand-primary-dark: #003D7A;
+  --color-brand-sky: #C1D6EA;
+  --color-brand-cyan: #00BCD4;
+  --color-brand-off-white: #F9FAFB;
+  --color-brand-dark: #1F2937;
+  --color-brand-gray: #6B7280;
+  --color-brand-light-gray: #D1D5DB;
+
+  /* Semantic action colors — color tells the user what the button does */
+  --color-action-success: #22C55E;
+  --color-action-danger: #EF4444;
+  --color-action-warning: #F59E0B;
+  --color-action-info: #3B82F6;
+  --color-action-neutral: #6B7280;
+
+  /* Status colors for badges/indicators */
+  --color-status-success: #22C55E;
+  --color-status-error: #EF4444;
+  --color-status-running: #4A90E2;
+  --color-status-pending: #6B7280;
+  --color-status-warning: #F59E0B;
+  --color-status-critical: #EF4444;
+  --color-status-completed: #22C55E;
+  --color-status-planning: #F59E0B;
+
+  /* ALL fonts are Satoshi — brand only */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-sans);
+
+  /* Radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Brand typography scale */
+  --font-size-h1: 2.5rem;
+  --font-size-h2: 1.875rem;
+  --font-size-h3: 1.25rem;
+  --font-size-body: 1rem;
+  --font-size-sm: 0.875rem;
+
+  --line-height-h1: 1.2;
+  --line-height-h2: 1.3;
+  --line-height-h3: 1.4;
+  --line-height-body: 1.6;
+}
+
+/* ============================= */
+/* Light Theme (Brand Palette) */
+/* ============================= */
+
+:root {
+  --radius: 0.5rem;
+
+  /* Surfaces */
+  --background: #F9FAFB;
+  --foreground: #1F2937;
+
+  --card: #FFFFFF;
+  --card-foreground: #1F2937;
+
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2937;
+
+  /* Primary: Brand Blue */
+  --primary: #4A90E2;
+  --primary-foreground: #FFFFFF;
+
+  /* Secondary: Sky Blue */
+  --secondary: #C1D6EA;
+  --secondary-foreground: #003D7A;
+
+  /* Muted: Brand Grays */
+  --muted: #F3F4F6;
+  --muted-foreground: #6B7280;
+
+  /* Accent: Cyan Blue */
+  --accent: #00BCD4;
+  --accent-foreground: #FFFFFF;
+
+  /* Destructive: Semantic red for danger */
+  --destructive: #EF4444;
+
+  /* Borders: Brand Light Gray */
+  --border: #D1D5DB;
+  --input: #D1D5DB;
+  --ring: #4A90E2;
+
+  /* Status: Semantic colors — color = meaning */
+  --status-success: #22C55E;
+  --status-success-foreground: #FFFFFF;
+  --status-warning: #F59E0B;
+  --status-warning-foreground: #1F2937;
+  --status-error: #EF4444;
+  --status-error-foreground: #FFFFFF;
+  --status-running: #4A90E2;
+  --status-running-foreground: #FFFFFF;
+  --status-pending: #6B7280;
+  --status-pending-foreground: #FFFFFF;
+
+  /* Surfaces */
+  --surface-1: #F9FAFB;
+  --surface-2: #F3F4F6;
+  --surface-3: #E5E7EB;
+
+  /* Glow */
+  --glow-primary: #4A90E2;
+  --glow-success: #22C55E;
+  --glow-error: #EF4444;
+
+  /* Sidebar */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1F2937;
+  --sidebar-border: #D1D5DB;
+  --sidebar-accent: #C1D6EA;
+  --sidebar-accent-foreground: #003D7A;
+}
+
+/* ============================= */
+/* Dark Theme (Brand Adapted) */
+/* ============================= */
+
+.dark {
+  --background: #111827;
+  --foreground: #F9FAFB;
+
+  --card: #1F2937;
+  --card-foreground: #F9FAFB;
+
+  --popover: #1F2937;
+  --popover-foreground: #F9FAFB;
+
+  --primary: #4A90E2;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #1E3A5F;
+  --secondary-foreground: #C1D6EA;
+
+  --muted: #374151;
+  --muted-foreground: #9CA3AF;
+
+  --accent: #00BCD4;
+  --accent-foreground: #FFFFFF;
+
+  --destructive: #4A90E2;
+
+  --border: #374151;
+  --input: #374151;
+  --ring: #4A90E2;
+
+  --sidebar: #1F2937;
+  --sidebar-foreground: #F9FAFB;
+  --sidebar-border: #374151;
+  --sidebar-accent: #003D7A;
+  --sidebar-accent-foreground: #C1D6EA;
+}
+
+/* ============================= */
+/* Base Layer */
+/* ============================= */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
+  }
+
+  /* Brand Typography — Satoshi everywhere */
+  h1, .h1 {
+    font-size: var(--font-size-h1);
+    font-weight: 700;
+    line-height: var(--line-height-h1);
+    letter-spacing: -0.025em;
+  }
+
+  h2, .h2 {
+    font-size: var(--font-size-h2);
+    font-weight: 700;
+    line-height: var(--line-height-h2);
+    letter-spacing: -0.02em;
+  }
+
+  h3, .h3 {
+    font-size: var(--font-size-h3);
+    font-weight: 600;
+    line-height: var(--line-height-h3);
+  }
+
+  p, .body {
+    font-size: var(--font-size-body);
+    font-weight: 400;
+    line-height: var(--line-height-body);
+  }
+
+  /* code/pre also use Satoshi — brand only, with tabular nums */
+  code, pre, .font-mono {
+    font-family: var(--font-sans);
+    font-feature-settings: "tnum";
+    letter-spacing: -0.01em;
+  }
+}
+
+/* ============================= */
+/* Scrollbar */
+/* ============================= */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+/* ============================= */
+/* Glow Utilities (Brand Colors) */
+/* ============================= */
+
+.glow-success {
+  box-shadow: 0 0 16px -3px var(--glow-success);
+}
+
+.glow-error {
+  box-shadow: 0 0 16px -3px var(--glow-error);
+}
+
+.glow-primary {
+  box-shadow: 0 0 16px -3px var(--glow-primary);
+}
+
+/* ============================= */
+/* Modern Card & Surface Effects */
+/* ============================= */
+
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.gradient-border {
+  position: relative;
+}
+
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #4A90E2, #00BCD4);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #4A90E2, #00BCD4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================= */
+/* Ambient Page Background       */
+/* ============================= */
+
+.bg-grid-pattern {
+  background-image: radial-gradient(circle, rgba(74, 144, 226, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.bg-ambient-glow {
+  position: relative;
+}
+
+.bg-ambient-glow::before,
+.bg-ambient-glow::after {
+  content: "";
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(100px);
+}
+
+.bg-ambient-glow::before {
+  top: -10%;
+  right: -5%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(74, 144, 226, 0.12), transparent 70%);
+}
+
+.bg-ambient-glow::after {
+  bottom: -10%;
+  left: -5%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(0, 188, 212, 0.08), transparent 70%);
+}
+
+/* ============================= */
+/* Animated Gradient Border      */
+/* ============================= */
+
+@keyframes border-rotate {
+  0% { --border-angle: 0deg; }
+  100% { --border-angle: 360deg; }
+}
+
+@property --border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.animated-border {
+  position: relative;
+  border-color: transparent;
+}
+
+.animated-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from var(--border-angle), #4A90E2, #00BCD4, #4A90E2);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: border-rotate 3s linear infinite;
+}
+
+/* ============================= */
+/* Skeleton Shimmer              */
+/* ============================= */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.5rem;
+}

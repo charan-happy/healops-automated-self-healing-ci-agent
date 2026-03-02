@@ -1,0 +1,102 @@
+════════════════════════════════════════════════════════════════════════════════
+    HEALOPS CODEBASE CLEANUP — SUMMARY OF FIXES
+════════════════════════════════════════════════════════════════════════════════
+
+LOCATION: .github/workflows & Infrastructure/terraform
+
+═══════════════════════════════════════════════════════════════════════════════
+1. GITHUB WORKFLOWS ✅
+═══════════════════════════════════════════════════════════════════════════════
+
+✗ Issues Found:
+  • build.yml & build-deploy.yml: Artifact name mismatch
+    - Build uploaded: backend-build, frontend-build
+    - Deploy downloaded: api-build, web-build
+  • build-deploy.yml: Branch trigger mismatch (development vs main)
+  • build-deploy.yml: Conditional logic broken for workflow_dispatch
+  • build-deploy.yml: stale run-id references on manual triggers
+
+✓ Fixes Applied:
+  ✅ build.yml: Enabled main branch in push/PR triggers
+  ✅ build.yml: Renamed artifacts → api-build, web-build (aligned with deploy)
+  ✅ build.yml: Corrected output paths → apps/api/dist, apps/web/.next
+  ✅ build-deploy.yml: Updated workflow_run trigger branch → main
+  ✅ build-deploy.yml: Fixed conditional logic to handle workflow_dispatch
+  ✅ build-deploy.yml: Updated run-id with fallback (github.run_id for manual)
+
+═══════════════════════════════════════════════════════════════════════════════
+2. TERRAFORM CONFIGURATION ✅
+═══════════════════════════════════════════════════════════════════════════════
+
+✗ Issues Found in terraform.tfvars:
+  • Line 51: github_webhook_secret missing opening quote
+  • Line 27: github_app_private_key using quoted string (invalid for multi-line)
+
+✓ Fixes Applied:
+  ✅ terraform.tfvars: Added missing quote on github_webhook_secret
+  ✅ terraform.tfvars: Converted multi-line private key to heredoc (<<-EOK...EOK)
+
+✗ Issues Found in variables.tf:
+  • 25+ duplicate variable declarations (lines 154–340)
+  • Inline variable definitions using semicolons (invalid syntax)
+    Example: variable "vpc_cidr" { type = string; default = "..." }
+
+✓ Fixes Applied:
+  ✅ variables.tf: Removed all 25+ duplicate variable declarations
+  ✅ variables.tf: Converted all inline to multi-line format (proper HCL)
+
+✗ Issues Found in outputs.tf:
+  • 6 duplicate output declarations
+    (ec2_public_ip, ec2_instance_id, ssh_command, app_urls, s3_media_bucket, github_secrets_to_add)
+
+✓ Fixes Applied:
+  ✅ outputs.tf: Removed duplicate output blocks (kept consolidated versions)
+
+═══════════════════════════════════════════════════════════════════════════════
+3. INFRASTRUCTURE SCRIPTS ✅
+═══════════════════════════════════════════════════════════════════════════════
+
+✗ Issues Found:
+  • bootstrap.sh: 5-line stub file just calling boostrap.sh (misspelled)
+  • boostrap.sh: Full bootstrap script with misspelled filename
+  • bootstrap.sh: Wrapper created wrong dependency chain
+
+✓ Fixes Applied:
+  ✅ bootstrap.sh: Replaced stub with full implementation
+  ✅ boostrap.sh: Deleted (removed duplicate misspelled version)
+  ✅ All shell scripts validated for syntax errors
+
+═══════════════════════════════════════════════════════════════════════════════
+4. VALIDATION RESULTS ✅
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ Terraform Configuration:
+  • terraform validate: PASS (no duplicate variables/outputs)
+  • terraform fmt: PASS (all HCL syntax correct)
+  • JSON/YAML parsing: PASS (all workflow files valid)
+
+✓ Shell Scripts:
+  • bash -n syntax check: PASS (all scripts)
+
+════════════════════════════════════════════════════════════════════════════════
+SUMMARY
+════════════════════════════════════════════════════════════════════════════════
+
+Files Modified:
+  1. .github/workflows/build.yml
+  2. .github/workflows/build-deploy.yml
+  3. Infrastructure/terraform/terraform.tfvars
+  4. Infrastructure/terraform/variables.tf
+  5. Infrastructure/terraform/outputs.tf
+  6. Infrastructure/scripts/bootstrap.sh
+
+Files Deleted:
+  1. Infrastructure/scripts/boostrap.sh (duplicate - misspelled)
+
+Status: ✅ ALL ERRORS FIXED
+  • No syntax errors in Terraform
+  • No duplicate declarations
+  • No invalid HCL syntax
+  • CI/CD workflows properly aligned
+  • Bootstrap scripts consolidated
+

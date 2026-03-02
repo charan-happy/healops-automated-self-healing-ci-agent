@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────
+# Stage 1: Dependencies (pnpm workspace-aware)
+# ─────────────────────────────────────────────
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat python3 make g++
+RUN npm install -g pnpm@10.26.0
+WORKDIR /app
+
+# Copy workspace config first (for pnpm workspace resolution)
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/backend/package.json ./apps/backend/
+COPY libs/client_sdk/package.json ./libs/client_sdk/
+
+RUN pnpm install --frozen-lockfile --filter ./apps/backend...
+
+# ─────────────────────────────────────────────
+# Stage 2: Builder
+# ─────────────────────────────────────────────
+FROM node:20-alpine AS builder
+RUN apk add --no-cache libc6-compat python3 make g++
+RUN npm install -g pnpm@10.26.0
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/backend/node_modules ./apps/backend/node_modules
+# client_sdk deps are hoisted to root node_modules by pnpm — no separate copy needed
+
+COPY pnpm-workspace.yaml package.json ./
+COPY apps/backend ./apps/backend
+COPY libs/client_sdk ./libs/client_sdk
+
+ENV NODE_ENV=production
+
+# Build NestJS — produces dist/main.js AND dist/worker.main.js
+RUN cd apps/backend && pnpm run build
+
+# ─────────────────────────────────────────────
+# Stage 3: Runner (Production / CI Mirror)
+# Runs BOTH main.ts (API) and worker.main.ts (BullMQ)
+# Entrypoint is overridden per-service in docker-compose
+# ─────────────────────────────────────────────
+FROM node:20-alpine AS runner
+RUN apk add --no-cache \
+    libc6-compat \
+    curl \
+    dumb-init \
+    postgresql-client
+
+# Non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser  --system --uid 1001 nestjs
+
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=4000
+
+# Copy compiled output — includes dist/main.js AND dist/worker.main.js
+COPY --from=builder /app/apps/backend/dist ./dist
+COPY --from=builder /app/apps/backend/node_modules ./node_modules
+COPY --from=builder /app/apps/backend/package.json ./package.json
+
+RUN chown -R nestjs:nodejs /app
+USER nestjs
+
+EXPOSE 4000
+ENTRYPOINT ["dumb-init", "--"]
+
+# Default: API server. Override with ["node", "dist/worker.main.js"] for worker
+CMD ["node", "dist/main.js"]
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:4000/health || exit 1
