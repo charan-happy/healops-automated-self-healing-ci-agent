@@ -10,6 +10,8 @@ import type { CommitDetail } from "../_libs/github/github-service";
 import { fetchPipelineStatus } from "../_libs/healops-api";
 import type { PipelineStatusResponse, PipelineFailure } from "../_libs/healops-api";
 import type { PipelineStatus } from "../_libs/mockData";
+import { trackEvent, POSTHOG_EVENTS } from "../_libs/utils/analytics";
+import { FixFeedbackWidget } from "../_components/FixFeedbackWidget";
 
 const FixDetailsPage = () => {
   const searchParams = useSearchParams();
@@ -28,6 +30,8 @@ const FixDetailsPage = () => {
       setLoading(false);
       return;
     }
+
+    trackEvent(POSTHOG_EVENTS.FIX_DETAILS_VIEWED, { owner, repo, commitId });
 
     Promise.all([
       fetchCommitDetail(owner, repo, commitId),
@@ -377,6 +381,7 @@ const FailureCard = ({ failure }: { failure: PipelineFailure }) => {
             href={job.pullRequest.prUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => trackEvent(POSTHOG_EVENTS.FIX_PR_CLICKED, { prUrl: job.pullRequest?.prUrl, status: job.pullRequest?.status })}
             className="inline-flex items-center gap-1.5 text-sm text-brand-cyan hover:underline font-bold"
           >
             <ExternalLink size={14} />
@@ -388,6 +393,13 @@ const FailureCard = ({ failure }: { failure: PipelineFailure }) => {
               <span className="text-xs bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded font-bold ml-1">Draft</span>
             )}
           </a>
+        </div>
+      )}
+
+      {/* Feedback widget — show when agent has produced a result */}
+      {(job.status === "success" || job.pullRequest) && (
+        <div className="px-4 py-3 border-t border-border/40">
+          <FixFeedbackWidget jobId={job.id} failureId={failure.id} />
         </div>
       )}
     </div>

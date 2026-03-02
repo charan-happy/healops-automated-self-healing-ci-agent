@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, FolderGit2, Check, Loader2 } from "lucide-react";
-import type { OnboardingData } from "@/app/_libs/types/onboarding";
+import { Search, FolderGit2, Check, Loader2, GitBranch } from "lucide-react";
+import type { OnboardingData, CiProviderEntry } from "@/app/_libs/types/onboarding";
 import { fetchRepos } from "@/app/_libs/github/github-service";
+import { fetchAvailableRepos } from "@/app/_libs/healops-api";
+import { PROVIDER_META } from "./StepCIProvider";
 
 interface Props {
   data: Partial<OnboardingData>;
@@ -14,49 +16,93 @@ interface Repo {
   externalRepoId: string;
   name: string;
   defaultBranch: string;
+  provider: string;
+  providerConfigId?: string;
 }
 
 const FALLBACK_REPOS: Repo[] = [
-  { externalRepoId: "1", name: "my-org/frontend", defaultBranch: "main" },
-  { externalRepoId: "2", name: "my-org/backend", defaultBranch: "main" },
-  { externalRepoId: "3", name: "my-org/api-gateway", defaultBranch: "develop" },
-  { externalRepoId: "4", name: "my-org/mobile-app", defaultBranch: "main" },
-  { externalRepoId: "5", name: "my-org/infra", defaultBranch: "main" },
+  { externalRepoId: "1", name: "my-org/frontend", defaultBranch: "main", provider: "github" },
+  { externalRepoId: "2", name: "my-org/backend", defaultBranch: "main", provider: "github" },
+  { externalRepoId: "3", name: "my-org/api-gateway", defaultBranch: "develop", provider: "github" },
+  { externalRepoId: "4", name: "my-org/mobile-app", defaultBranch: "main", provider: "gitlab" },
+  { externalRepoId: "5", name: "my-org/infra", defaultBranch: "main", provider: "jenkins" },
 ];
 
 export function StepRepositories({ data, onUpdate }: Props) {
   const [search, setSearch] = useState("");
-  const [repos, setRepos] = useState<Repo[]>(FALLBACK_REPOS);
+  const [repos, setRepos] = useState<Repo[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(true);
 
   const selected = data.repositories ?? [];
   const selectedIds = new Set(selected.map((r) => r.externalRepoId));
 
+  const providers: CiProviderEntry[] = data.ciProviders ?? (data.ciProvider ? [data.ciProvider] : []);
+
   useEffect(() => {
     async function loadRepos() {
-      try {
-        const projects = await fetchRepos();
-        if (projects.length > 0) {
-          setRepos(
-            projects.map((p) => ({
-              externalRepoId: p.id,
-              name: p.repo,
-              defaultBranch: "main",
-            })),
-          );
+      const allRepos: Repo[] = [];
+      let anySuccess = false;
+
+      // Fetch repos from each configured provider
+      for (const provider of providers) {
+        try {
+          if (provider.providerConfigId) {
+            // Use backend API to fetch repos from this specific provider config
+            const result = await fetchAvailableRepos(provider.providerConfigId);
+            if (result && result.length > 0) {
+              allRepos.push(
+                ...result.map((r) => ({
+                  externalRepoId: r.externalRepoId,
+                  name: r.name,
+                  defaultBranch: r.defaultBranch,
+                  provider: r.provider,
+                  providerConfigId: r.providerConfigId,
+                })),
+              );
+              anySuccess = true;
+              continue;
+            }
+          }
+
+          // Fallback: for GitHub, try the direct GitHub API
+          if (provider.type === "github") {
+            const projects = await fetchRepos();
+            if (projects.length > 0) {
+              allRepos.push(
+                ...projects.map((p) => ({
+                  externalRepoId: p.id,
+                  name: p.repo,
+                  defaultBranch: "main",
+                  provider: "github",
+                  providerConfigId: provider.providerConfigId,
+                })),
+              );
+              anySuccess = true;
+            }
+          }
+        } catch {
+          // Continue to next provider
         }
-      } catch {
-        // Fall back to FALLBACK_REPOS (already set as default)
-      } finally {
-        setLoadingRepos(false);
       }
+
+      if (!anySuccess) {
+        // Fall back to demo repos
+        setRepos(FALLBACK_REPOS);
+      } else {
+        setRepos(allRepos);
+      }
+      setLoadingRepos(false);
     }
     void loadRepos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = repos.filter((r) =>
     r.name.toLowerCase().includes(search.toLowerCase()),
   );
+
+  // Group repos by provider for display
+  const groupedProviders = [...new Set(filtered.map((r) => r.provider))];
 
   const toggleRepo = (repo: Repo) => {
     if (selectedIds.has(repo.externalRepoId)) {
@@ -67,7 +113,15 @@ export function StepRepositories({ data, onUpdate }: Props) {
       });
     } else {
       onUpdate({
-        repositories: [...selected, repo],
+        repositories: [
+          ...selected,
+          {
+            externalRepoId: repo.externalRepoId,
+            name: repo.name,
+            defaultBranch: repo.defaultBranch,
+            providerConfigId: repo.providerConfigId,
+          },
+        ],
       });
     }
   };
@@ -92,7 +146,7 @@ export function StepRepositories({ data, onUpdate }: Props) {
         />
       </div>
 
-      <div className="max-h-64 space-y-2 overflow-y-auto">
+      <div className="max-h-64 space-y-4 overflow-y-auto">
         {loadingRepos ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="size-5 animate-spin text-brand-cyan" />
@@ -101,35 +155,64 @@ export function StepRepositories({ data, onUpdate }: Props) {
             </span>
           </div>
         ) : (
-          filtered.map((repo) => {
-            const isSelected = selectedIds.has(repo.externalRepoId);
+          groupedProviders.map((providerKey) => {
+            const providerRepos = filtered.filter((r) => r.provider === providerKey);
+            const meta = PROVIDER_META[providerKey as keyof typeof PROVIDER_META];
+
             return (
-              <button
-                key={repo.externalRepoId}
-                onClick={() => toggleRepo(repo)}
-                className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-all ${
-                  isSelected
-                    ? "border-brand-cyan bg-brand-cyan/5"
-                    : "border-white/10 bg-white/[0.02] hover:border-white/20"
-                }`}
-              >
-                <div
-                  className={`flex size-5 items-center justify-center rounded border transition-all ${
-                    isSelected
-                      ? "border-brand-cyan bg-brand-cyan"
-                      : "border-white/20"
-                  }`}
-                >
-                  {isSelected && <Check className="size-3 text-black" />}
+              <div key={providerKey}>
+                {groupedProviders.length > 1 && (
+                  <div className="mb-2 flex items-center gap-2">
+                    <GitBranch className="size-3.5 text-muted-foreground" />
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {meta?.name ?? providerKey}
+                    </span>
+                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {providerRepos.length}
+                    </span>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  {providerRepos.map((repo) => {
+                    const isSelected = selectedIds.has(repo.externalRepoId);
+                    return (
+                      <button
+                        key={`${repo.provider}-${repo.externalRepoId}`}
+                        onClick={() => toggleRepo(repo)}
+                        className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-all ${
+                          isSelected
+                            ? "border-brand-cyan bg-brand-cyan/5"
+                            : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                        }`}
+                      >
+                        <div
+                          className={`flex size-5 items-center justify-center rounded border transition-all ${
+                            isSelected
+                              ? "border-brand-cyan bg-brand-cyan"
+                              : "border-white/20"
+                          }`}
+                        >
+                          {isSelected && <Check className="size-3 text-black" />}
+                        </div>
+                        <FolderGit2 className="size-4 text-muted-foreground" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium">{repo.name}</p>
+                            {groupedProviders.length > 1 && (
+                              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                                {repo.provider}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Default: {repo.defaultBranch}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-                <FolderGit2 className="size-4 text-muted-foreground" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{repo.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Default: {repo.defaultBranch}
-                  </p>
-                </div>
-              </button>
+              </div>
             );
           })
         )}

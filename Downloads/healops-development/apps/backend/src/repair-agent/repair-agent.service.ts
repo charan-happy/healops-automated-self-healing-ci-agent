@@ -21,6 +21,9 @@ import { PlatformRepository } from '@db/repositories/healops/platform.repository
 import { HealopsAuditLogRepository } from '@db/repositories/healops/audit-log.repository';
 import { AiService } from '@ai/ai.service';
 import { GithubService } from '../github/github.service';
+import { CiProviderFactory } from '../ci-provider/ci-provider.factory';
+import { CiProviderConfigsRepository } from '@db/repositories/healops/ci-provider-configs.repository';
+import type { CiConnectionConfig } from '../ci-provider/interfaces/ci-provider.interface';
 import { PullRequestService } from '../github/services/pull-request.service';
 import { EscalationService } from '../github/services/escalation.service';
 import { VectorMemoryService } from '../vector-memory/vector-memory.service';
@@ -45,6 +48,8 @@ export class RepairAgentService {
     private readonly auditLogRepository: HealopsAuditLogRepository,
     private readonly aiService: AiService,
     private readonly githubService: GithubService,
+    private readonly ciProviderFactory: CiProviderFactory,
+    private readonly ciProviderConfigsRepository: CiProviderConfigsRepository,
     private readonly pullRequestService: PullRequestService,
     private readonly escalationService: EscalationService,
     private readonly vectorMemoryService: VectorMemoryService,
@@ -319,22 +324,37 @@ export class RepairAgentService {
         const branchName = `healops/fix/${jobId}`;
 
         try {
-          // Get default branch SHA
-          const defaultBranch = await this.githubService.getDefaultBranch(
-            repoContext.installationId,
-            repoContext.owner,
-            repoContext.repo,
-          );
+          // Resolve the CI provider — use CiProviderFactory when possible,
+          // fall back to GithubService for repos without ciProviderConfigId
+          const connectionConfig = await this.buildConnectionConfigFromContext(repoContext);
+          const providerType = repoContext.provider ?? 'github';
+          const ciProvider = this.getCiProviderSafe(providerType);
+
+          let defaultBranch: string;
+          if (ciProvider && connectionConfig) {
+            defaultBranch = await ciProvider.getDefaultBranch(connectionConfig);
+          } else {
+            // Fallback to GithubService
+            defaultBranch = await this.githubService.getDefaultBranch(
+              repoContext.installationId,
+              repoContext.owner,
+              repoContext.repo,
+            );
+          }
 
           // Create fix branch
           const latestRef = await this.getLatestSha(repoContext, defaultBranch);
-          await this.githubService.createBranch(
-            repoContext.installationId,
-            repoContext.owner,
-            repoContext.repo,
-            branchName,
-            latestRef,
-          );
+          if (ciProvider && connectionConfig) {
+            await ciProvider.createBranch(connectionConfig, branchName, latestRef);
+          } else {
+            await this.githubService.createBranch(
+              repoContext.installationId,
+              repoContext.owner,
+              repoContext.repo,
+              branchName,
+              latestRef,
+            );
+          }
 
           // Push patched files
           const filesToPush = Object.entries(patchedFiles).map(([path, content]) => ({
@@ -343,14 +363,19 @@ export class RepairAgentService {
           }));
 
           if (filesToPush.length > 0) {
-            await this.githubService.pushFiles(
-              repoContext.installationId,
-              repoContext.owner,
-              repoContext.repo,
-              branchName,
-              filesToPush,
-              `fix(healops): [${classification.errorTypeCode}] ${affectedFile}\n\nDiagnosis: ${claudeOutput.diagnosis}\nStrategy: ${claudeOutput.fix_strategy}\nConfidence: ${String(Math.round(claudeOutput.confidence * 100))}%`,
-            );
+            const commitMsg = `fix(healops): [${classification.errorTypeCode}] ${affectedFile}\n\nDiagnosis: ${claudeOutput.diagnosis}\nStrategy: ${claudeOutput.fix_strategy}\nConfidence: ${String(Math.round(claudeOutput.confidence * 100))}%`;
+            if (ciProvider && connectionConfig) {
+              await ciProvider.pushFiles(connectionConfig, branchName, filesToPush, commitMsg);
+            } else {
+              await this.githubService.pushFiles(
+                repoContext.installationId,
+                repoContext.owner,
+                repoContext.repo,
+                branchName,
+                filesToPush,
+                commitMsg,
+              );
+            }
           }
 
           // Create draft PR
@@ -856,13 +881,28 @@ export class RepairAgentService {
     const fileContents: Record<string, string> = {};
 
     try {
-      const content = await this.githubService.getFileContent(
-        repoContext.installationId,
-        repoContext.owner,
-        repoContext.repo,
-        affectedFile,
-        repoContext.commitSha ?? 'HEAD',
-      );
+      const providerType = repoContext.provider ?? 'github';
+      const ciProvider = this.getCiProviderSafe(providerType);
+      const connectionConfig = await this.buildConnectionConfigFromContext(repoContext);
+
+      let content: string | null = null;
+      if (ciProvider && connectionConfig) {
+        content = await ciProvider.fetchFile(
+          connectionConfig,
+          affectedFile,
+          repoContext.commitSha ?? 'HEAD',
+        );
+      } else {
+        // Fallback to GithubService
+        content = await this.githubService.getFileContent(
+          repoContext.installationId,
+          repoContext.owner,
+          repoContext.repo,
+          affectedFile,
+          repoContext.commitSha ?? 'HEAD',
+        );
+      }
+
       if (content) {
         fileContents[affectedFile] = content;
       }
@@ -871,6 +911,53 @@ export class RepairAgentService {
     }
 
     return fileContents;
+  }
+
+  /**
+   * Build a CiConnectionConfig from a RepoContext by looking up the
+   * ci_provider_configs record if available.
+   */
+  private async buildConnectionConfigFromContext(
+    repoContext: RepoContext,
+  ): Promise<CiConnectionConfig | null> {
+    try {
+      // If we have a ciProviderConfigId, look up the stored config
+      if (repoContext.ciProviderConfigId) {
+        const configRecord = await this.ciProviderConfigsRepository.findConfigById(
+          repoContext.ciProviderConfigId,
+        );
+        if (configRecord) {
+          const storedConfig = (configRecord.config as Record<string, string>) ?? {};
+          return this.ciProviderFactory.buildConnectionConfig({
+            name: `${repoContext.owner}/${repoContext.repo}`,
+            provider: configRecord.providerType,
+            authToken: storedConfig['accessToken'] ?? storedConfig['installationId'] ?? '',
+            githubInstallationId: storedConfig['installationId'] ?? repoContext.installationId,
+          });
+        }
+      }
+
+      // Fallback: build from repoContext directly
+      return this.ciProviderFactory.buildConnectionConfig({
+        name: `${repoContext.owner}/${repoContext.repo}`,
+        provider: repoContext.provider ?? 'github',
+        authToken: '',
+        githubInstallationId: repoContext.installationId,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get a CI provider by type, returning null instead of throwing.
+   */
+  private getCiProviderSafe(providerType: string) {
+    try {
+      return this.ciProviderFactory.getProvider(providerType);
+    } catch {
+      return null;
+    }
   }
 
   private async getLatestSha(repoContext: RepoContext, branch: string): Promise<string> {
@@ -1199,6 +1286,10 @@ interface RepoContext {
   installationId: string;
   owner: string;
   repo: string;
+  /** CI provider type: 'github' | 'gitlab' | 'jenkins' */
+  provider: string;
+  /** FK to ci_provider_configs table */
+  ciProviderConfigId: string | null;
   branchName?: string;
   commitSha?: string;
   runUrl?: string;

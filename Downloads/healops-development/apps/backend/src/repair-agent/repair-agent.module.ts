@@ -17,6 +17,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AiModule } from '@ai/ai.module';
 import { GithubModule } from '../github/github.module';
+import { CiProviderModule } from '../ci-provider/ci-provider.module';
 import { VectorMemoryModule } from '../vector-memory/vector-memory.module';
 import { ValidatorModule } from '../validator/validator.module';
 import { RepairAgentService } from './repair-agent.service';
@@ -30,6 +31,7 @@ import { QualityGateService } from './services/quality-gate.service';
     ConfigModule,
     AiModule,
     GithubModule,
+    CiProviderModule,
     VectorMemoryModule,
     ValidatorModule,
   ],

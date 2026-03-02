@@ -6,7 +6,9 @@ import {
   fetchBillingPlans,
   fetchSubscription,
   fetchUsageStats,
+  createCheckoutSession,
 } from "@/app/_libs/healops-api";
+import { trackEvent, POSTHOG_EVENTS } from "@/app/_libs/utils/analytics";
 import type {
   BillingPlan,
   Subscription,
@@ -65,11 +67,18 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-xl font-bold">Billing</h2>
-        <p className="text-sm text-muted-foreground">
-          Manage your plan and monitor usage
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Billing</h2>
+          <p className="text-sm text-muted-foreground">
+            Manage your plan and monitor usage
+          </p>
+        </div>
+        {process.env.NEXT_PUBLIC_STRIPE_MODE === "test" && (
+          <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-1 text-xs font-semibold text-yellow-400">
+            Test Mode
+          </span>
+        )}
       </div>
 
       {/* Current plan & usage */}
@@ -153,6 +162,18 @@ export default function BillingPage() {
                 </ul>
                 <button
                   disabled={isCurrent}
+                  onClick={async () => {
+                    if (isCurrent) return;
+                    trackEvent(POSTHOG_EVENTS.CHECKOUT_STARTED, { plan: plan.slug });
+                    const result = await createCheckoutSession(
+                      plan.slug,
+                      `${window.location.origin}/settings/billing?success=true`,
+                      `${window.location.origin}/settings/billing`,
+                    );
+                    if (result?.url) {
+                      window.location.href = result.url;
+                    }
+                  }}
                   className={`mt-5 w-full rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
                     isCurrent
                       ? "cursor-default bg-brand-cyan/10 text-brand-cyan"
