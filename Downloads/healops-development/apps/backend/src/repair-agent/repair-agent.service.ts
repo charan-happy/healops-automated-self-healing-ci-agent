@@ -35,6 +35,8 @@ import { QualityGateService } from './services/quality-gate.service';
 import { hashDiff } from '@common/utils/hash';
 import type { AgentState, ClaudeFixOutput, PreviousAttempt } from './interfaces/agent-state.interface';
 import type { HealOpsConfig } from '@config/healops.config';
+import { EventsGateway } from '../gateway/events.gateway';
+import { HealopsMetricsService } from '../api/metrics/healops-metrics.service';
 
 @Injectable()
 export class RepairAgentService {
@@ -58,7 +60,18 @@ export class RepairAgentService {
     private readonly classifierService: ClassifierService,
     private readonly promptBuilderService: PromptBuilderService,
     private readonly qualityGateService: QualityGateService,
+    private readonly eventsGateway: EventsGateway,
+    private readonly healopsMetrics: HealopsMetricsService,
   ) {}
+
+  /** Emit a pipeline stage event via WebSocket for realtime UI updates. */
+  private emitStage(jobId: string, stage: string, message: string, progress: number): void {
+    try {
+      this.eventsGateway.emitToAll('repair:stage', { jobId, stage, message, progress });
+    } catch (_err) {
+      this.logger.debug(`Failed to emit stage event: ${stage}`);
+    }
+  }
 
   /**
    * Execute the full repair pipeline for a given job.
@@ -74,6 +87,7 @@ export class RepairAgentService {
     // ──────────────────────────────────────────────────────────────────────
     // 1. GATHER CONTEXT
     // ──────────────────────────────────────────────────────────────────────
+    this.emitStage(jobId, 'gatherContext', 'Loading failure data and parsing logs...', 5);
     const failure = await this.failuresRepository.findFailureById(failureId);
     if (!failure) {
       this.logger.error(`Failure ${failureId} not found`);
@@ -102,6 +116,7 @@ export class RepairAgentService {
     const language = parsed.language || failure.language;
 
     // Classify the error type
+    this.emitStage(jobId, 'classify', 'Classifying error type...', 12);
     const classification = await this.classifierService.classify(errorSnippet, language);
 
     this.logger.log(
@@ -153,6 +168,7 @@ export class RepairAgentService {
       }
 
       // ── 2. RAG: Search for similar past fixes ────────────────────────
+      this.emitStage(jobId, 'searchSimilar', `Searching similar fixes (attempt ${String(attempt)})...`, 25);
       let ragExamples: string[] = [];
       try {
         const embedding = await this.generateEmbedding(
@@ -177,6 +193,7 @@ export class RepairAgentService {
       }
 
       // ── 3. Generate fix via LLM ──────────────────────────────────────
+      this.emitStage(jobId, 'generateFix', `Generating fix via LLM (attempt ${String(attempt)})...`, 40);
       const prompt = this.promptBuilderService.buildPrompt({
         language,
         errorTypeCode: classification.errorTypeCode,
@@ -228,6 +245,7 @@ export class RepairAgentService {
       }
 
       // ── 4. Quality Gate ──────────────────────────────────────────────
+      this.emitStage(jobId, 'qualityGate', 'Running quality gate validation...', 55);
       const qgResult = this.qualityGateService.validate(claudeOutput, {
         errorTypeCode: classification.errorTypeCode,
         previousFixFingerprints,
@@ -270,6 +288,7 @@ export class RepairAgentService {
       }
 
       // ── 5. Pre-check (compile) ──────────────────────────────────────
+      this.emitStage(jobId, 'preCheck', 'Running pre-check compilation...', 65);
       // Build patched files from the diff + original file contents
       const patchedFiles = this.applyDiffToFiles(claudeOutput.diff, fileContents);
       const attemptRecord = await this.persistAttempt(jobId, attempt, claudeOutput, '', totalTokensUsed);
@@ -320,6 +339,7 @@ export class RepairAgentService {
       // ──────────────────────────────────────────────────────────────────
       // 6. PUSH BRANCH + 7. CREATE PR
       // ──────────────────────────────────────────────────────────────────
+      this.emitStage(jobId, 'pushBranch', 'Pushing fix branch...', 80);
       if (repoContext) {
         const branchName = `healops/fix/${jobId}`;
 
@@ -379,6 +399,7 @@ export class RepairAgentService {
           }
 
           // Create draft PR
+          this.emitStage(jobId, 'createPR', 'Creating draft pull request...', 90);
           const prResult = await this.pullRequestService.createDraftPr({
             installationId: repoContext.installationId,
             owner: repoContext.owner,
@@ -442,10 +463,20 @@ export class RepairAgentService {
         durationMs,
       });
 
+      // Record metrics
+      this.healopsMetrics.incrementJobs('completed', classification.errorTypeCode);
+      this.healopsMetrics.incrementAttempts('success', classification.errorTypeCode);
+      this.healopsMetrics.observeConfidence(classification.errorTypeCode, claudeOutput.confidence);
+      this.healopsMetrics.observeFixLatency(classification.errorTypeCode, durationMs / 1000);
+      this.healopsMetrics.incrementTokens('input', totalTokensUsed);
+
       return this.buildState(jobId, failureId, 'success', previousAttempts, classification.errorTypeCode, claudeOutput);
     }
 
-    // All retries exhausted
+    // All retries exhausted — record metrics + escalate
+    this.healopsMetrics.incrementJobs('escalated', classification.errorTypeCode);
+    this.healopsMetrics.incrementEscalation('max_retries');
+    this.healopsMetrics.observeFixLatency(classification.errorTypeCode, (Date.now() - startTime) / 1000);
     this.logger.warn(`Job ${jobId}: all ${String(maxRetries)} retries exhausted — escalating`);
     await this.doEscalate(jobId, failureId, repoContext, {
       errorTypeCode: classification.errorTypeCode,

@@ -6,6 +6,7 @@ import { Job } from 'bullmq';
 import { DeadLetterQueueService } from '@dead-letter-queue/dead-letter-queue.service';
 import { HealopsJobsRepository } from '@db/repositories/healops/jobs.repository';
 import { RepairAgentService } from '../../../repair-agent/repair-agent.service';
+import { EventsGateway } from '../../../gateway/events.gateway';
 
 @Processor(QueueName.HEALOPS_REPAIR, {
   concurrency: 2,
@@ -20,6 +21,7 @@ export class RepairQueueProcessor extends WorkerHost {
     private readonly jobsRepository: HealopsJobsRepository,
     private readonly dlqService: DeadLetterQueueService,
     private readonly repairAgentService: RepairAgentService,
+    private readonly eventsGateway: EventsGateway,
   ) {
     super();
   }
@@ -64,22 +66,35 @@ export class RepairQueueProcessor extends WorkerHost {
   }
 
   @OnWorkerEvent('active')
-  async onActive(job: Job) {
+  async onActive(job: Job<IRepairJobData>) {
     this.logger.debug(`Job ${job.id} is now active`);
     if (typeof job.log === 'function') job.log(`Job ${job.id} is now active`);
+    this.eventsGateway.emitToAll('repair:started', {
+      jobId: job.data.jobId,
+      failureId: job.data.failureId,
+    });
   }
 
   @OnWorkerEvent('completed')
-  async onCompleted(job: Job) {
+  async onCompleted(job: Job<IRepairJobData>) {
     this.logger.debug(`Job ${job.id} has been completed`);
     if (typeof job.log === 'function') job.log(`Job ${job.id} has been completed`);
+    const result = job.returnvalue as { jobId?: string; status?: string } | undefined;
+    this.eventsGateway.emitToAll('repair:completed', {
+      jobId: job.data.jobId,
+      status: result?.status ?? 'completed',
+    });
   }
 
   @OnWorkerEvent('failed')
-  async onFailed(job: Job) {
+  async onFailed(job: Job<IRepairJobData>) {
     const logString_ = `Job ${job.id} has failed with reason: ${job?.failedReason}`;
     this.logger.error(logString_);
     this.logger.error(job?.stacktrace);
+    this.eventsGateway.emitToAll('repair:failed', {
+      jobId: job.data.jobId,
+      reason: job?.failedReason ?? 'Unknown error',
+    });
 
     try {
       await this.dlqService.addFailedJobToDLQ({

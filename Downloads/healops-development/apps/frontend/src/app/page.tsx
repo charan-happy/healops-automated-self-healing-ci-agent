@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Loader2,
   Mail,
+  Heart,
 } from "lucide-react";
 
 const FEATURES = [
@@ -316,19 +317,53 @@ export default function LandingPage() {
       </section>
 
       {/* ─── Footer ──────────────────────────────────────────────────── */}
-      <footer className="relative z-10 border-t border-white/[0.06] py-8">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-brand-primary">
-              <Zap className="size-3.5 text-white" />
+      <footer className="relative z-10 border-t border-white/[0.06] pt-12 pb-8">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-8 px-6">
+          {/* Nav row */}
+          <div className="flex w-full items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-brand-primary">
+                <Zap className="size-3.5 text-white" />
+              </div>
+              <span className="text-sm font-bold text-gradient">HealOps</span>
             </div>
-            <span className="text-sm font-bold text-muted-foreground">HealOps</span>
+            <div className="flex items-center gap-6 text-xs text-muted-foreground">
+              <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
+              <Link href="/login" className="hover:text-foreground transition-colors">Sign In</Link>
+              <Link href="/register" className="hover:text-foreground transition-colors">Register</Link>
+            </div>
           </div>
-          <div className="flex items-center gap-6 text-xs text-muted-foreground">
-            <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
-            <Link href="/login" className="hover:text-foreground transition-colors">Sign In</Link>
-            <Link href="/register" className="hover:text-foreground transition-colors">Register</Link>
+
+          {/* Contributors showcase */}
+          <div className="w-full rounded-2xl border border-white/[0.06] bg-gradient-to-b from-white/[0.03] to-transparent p-6 backdrop-blur-sm">
+            <div className="mb-4 flex items-center justify-center gap-2">
+              <Heart className="size-4 text-rose-400" />
+              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Built with passion by
+              </span>
+              <Heart className="size-4 text-rose-400" />
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {[
+                { name: "Deepanshu Goyal", gradient: "from-brand-cyan via-emerald-400 to-teal-300" },
+                { name: "Jahnavi Sardana", gradient: "from-violet-400 via-purple-400 to-fuchsia-400" },
+                { name: "Nagacharan Gudiyatham", gradient: "from-amber-400 via-orange-400 to-rose-400" },
+                { name: "Ashish Gour", gradient: "from-sky-400 via-blue-400 to-indigo-400" },
+                { name: "Vikas Goyal", gradient: "from-emerald-400 via-green-400 to-lime-400" },
+              ].map((contributor) => (
+                <span
+                  key={contributor.name}
+                  className={`inline-block rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-1.5 text-sm font-bold bg-gradient-to-r ${contributor.gradient} bg-clip-text text-transparent transition-all hover:scale-105 hover:border-white/[0.15] hover:bg-white/[0.08] hover:shadow-lg`}
+                >
+                  {contributor.name}
+                </span>
+              ))}
+            </div>
           </div>
+
+          <p className="text-xs text-muted-foreground/40">
+            &copy; {new Date().getFullYear()} HealOps &mdash; Autonomous Pipeline Healing
+          </p>
         </div>
       </footer>
     </div>

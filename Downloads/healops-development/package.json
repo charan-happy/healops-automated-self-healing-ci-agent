@@ -11,10 +11,6 @@
     "dev": "nx run-many --target=serve --all --parallel",
     "generate:sdk": "pnpm --filter backend generate:client"
   },
-  "engines": {
-    "node": "22.22.0",
-    "pnpm": "10.26.0"
-  },
   "devDependencies": {
     "@nx/nest": "^22.5.2",
     "@nx/next": "^22.5.2",
@@ -53,5 +49,9 @@
     "@types/unzipper": "^0.10.11",
     "adm-zip": "^0.5.16",
     "unzipper": "^0.12.3"
+  },
+  "engines": {
+    "node": "22.22.0",
+    "pnpm": "10.26.0"
   }
 }

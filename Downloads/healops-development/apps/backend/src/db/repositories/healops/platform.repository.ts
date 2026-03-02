@@ -269,6 +269,114 @@ export class PlatformRepository {
     return result;
   }
 
+  // ─── Project / Branch / Commit Browsing ────────────────────────────────
+
+  async findRepositoriesWithBranchCount(organizationId: string) {
+    return this.dbService.db
+      .select({
+        id: repositories.id,
+        name: repositories.name,
+        provider: repositories.provider,
+        externalRepoId: repositories.externalRepoId,
+        defaultBranch: repositories.defaultBranch,
+        githubInstallationId: repositories.githubInstallationId,
+        isActive: repositories.isActive,
+        createdAt: repositories.createdAt,
+        branchCount: sql<number>`(
+          SELECT count(*)::int FROM branches
+          WHERE branches.repository_id = "repositories"."id"
+        )`,
+        lastActivity: sql<string | null>`(
+          SELECT max(c.committed_at)::text FROM commits c
+          INNER JOIN branches b ON c.branch_id = b.id
+          WHERE b.repository_id = "repositories"."id"
+        )`,
+      })
+      .from(repositories)
+      .where(
+        and(
+          eq(repositories.organizationId, organizationId),
+          eq(repositories.isActive, true),
+        ),
+      )
+      .orderBy(desc(repositories.createdAt));
+  }
+
+  async findBranchesByRepository(
+    repositoryId: string,
+    includeHealopsBranches = false,
+  ) {
+    const conditions = [eq(branches.repositoryId, repositoryId)];
+    if (!includeHealopsBranches) {
+      conditions.push(eq(branches.isHealopsBranch, false));
+    }
+
+    return this.dbService.db
+      .select({
+        id: branches.id,
+        name: branches.name,
+        isDefault: branches.isDefault,
+        isProtected: branches.isProtected,
+        createdAt: branches.createdAt,
+        commitCount: sql<number>`(
+          SELECT count(*)::int FROM commits
+          WHERE commits.branch_id = "branches"."id"
+        )`,
+        lastCommitAt: sql<string | null>`(
+          SELECT max(committed_at)::text FROM commits
+          WHERE commits.branch_id = "branches"."id"
+        )`,
+        lastCommitAuthor: sql<string | null>`(
+          SELECT author FROM commits
+          WHERE commits.branch_id = "branches"."id"
+          ORDER BY committed_at DESC LIMIT 1
+        )`,
+      })
+      .from(branches)
+      .where(and(...conditions))
+      .orderBy(desc(branches.createdAt));
+  }
+
+  async findCommitsByBranch(branchId: string, limit = 30, offset = 0) {
+    return this.dbService.db
+      .select({
+        id: commits.id,
+        commitSha: commits.commitSha,
+        author: commits.author,
+        message: commits.message,
+        source: commits.source,
+        committedAt: commits.committedAt,
+      })
+      .from(commits)
+      .where(eq(commits.branchId, branchId))
+      .orderBy(desc(commits.committedAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async findBranchById(branchId: string) {
+    const [row] = await this.dbService.db
+      .select()
+      .from(branches)
+      .where(eq(branches.id, branchId));
+    return row ?? null;
+  }
+
+  async upsertBranch(data: typeof branches.$inferInsert) {
+    const [row] = await this.dbService.db
+      .insert(branches)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [branches.repositoryId, branches.name],
+        set: {
+          isDefault: data.isDefault ?? false,
+          isProtected: data.isProtected ?? false,
+        },
+      })
+      .returning();
+    return row ?? null;
+  }
+
   // ─── Pipeline Status by Commit SHA ──────────────────────────────────────
 
   /**

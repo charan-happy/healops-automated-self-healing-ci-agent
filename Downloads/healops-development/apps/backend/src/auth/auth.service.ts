@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { HashingService } from '@common/hashing/hashing.service';
 import { TokenService } from './services/token.service';
 import { OAuthService } from './services/oauth.service';
@@ -21,7 +22,23 @@ export class AuthService {
     private readonly hashingService: HashingService,
     private readonly tokenService: TokenService,
     private readonly oauthService: OAuthService,
+    private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * Returns which auth providers are configured and available.
+   */
+  getAvailableProviders(): { email: boolean; google: boolean; github: boolean; apple: boolean } {
+    const googleId = this.configService.get<string>('GOOGLE_CLIENT_ID') ?? '';
+    const githubId = this.configService.get<string>('GITHUB_CLIENT_ID') ?? '';
+
+    return {
+      email: true,
+      google: googleId.length > 0 && googleId !== 'disabled-google-client-id',
+      github: githubId.length > 0 && githubId !== 'Iv1.xxxxxxxxx',
+      apple: false,
+    };
+  }
 
   /**
    * Registers a new user with the given credentials.

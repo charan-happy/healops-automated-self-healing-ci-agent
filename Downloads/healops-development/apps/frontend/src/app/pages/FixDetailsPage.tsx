@@ -12,6 +12,7 @@ import type { PipelineStatusResponse, PipelineFailure } from "../_libs/healops-a
 import type { PipelineStatus } from "../_libs/mockData";
 import { trackEvent, POSTHOG_EVENTS } from "../_libs/utils/analytics";
 import { FixFeedbackWidget } from "../_components/FixFeedbackWidget";
+import { AgentThinkingTimeline } from "../_components/agent/AgentThinkingTimeline";
 
 const FixDetailsPage = () => {
   const searchParams = useSearchParams();
@@ -338,37 +339,40 @@ const FailureCard = ({ failure }: { failure: PipelineFailure }) => {
               : <Wrench size={14} className="text-brand-cyan" />;
 
           return (
-            <div key={attempt.attemptNumber} className="flex items-center justify-between py-1.5 text-sm">
-              <div className="flex items-center gap-2">
-                {icon}
-                <span className="font-medium">Attempt #{attempt.attemptNumber}</span>
-                {attempt.patch && (
-                  <span className="text-xs text-muted-foreground">
-                    {attempt.patch.patchSize} bytes patched
-                  </span>
-                )}
+            <div key={attempt.attemptNumber}>
+              <div className="flex items-center justify-between py-1.5 text-sm">
+                <div className="flex items-center gap-2">
+                  {icon}
+                  <span className="font-medium">Attempt #{attempt.attemptNumber}</span>
+                  {attempt.patch && (
+                    <span className="text-xs text-muted-foreground">
+                      {attempt.patch.patchSize} bytes patched
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  {attempt.validations.map((v) => (
+                    <span key={v.stage} className="flex items-center gap-1">
+                      {v.buildStatus === "success" ? (
+                        <CheckCircle2 size={10} className="text-green-400" />
+                      ) : (
+                        <XCircle size={10} className="text-red-400" />
+                      )}
+                      {v.stage}
+                    </span>
+                  ))}
+                  {attempt.latencyMs !== null && (
+                    <span className="flex items-center gap-1">
+                      <Clock size={10} />
+                      {attempt.latencyMs < 1000
+                        ? `${attempt.latencyMs}ms`
+                        : `${(attempt.latencyMs / 1000).toFixed(1)}s`}
+                    </span>
+                  )}
+                  <span>{attempt.inputTokens + attempt.outputTokens} tokens</span>
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                {attempt.validations.map((v) => (
-                  <span key={v.stage} className="flex items-center gap-1">
-                    {v.buildStatus === "success" ? (
-                      <CheckCircle2 size={10} className="text-green-400" />
-                    ) : (
-                      <XCircle size={10} className="text-red-400" />
-                    )}
-                    {v.stage}
-                  </span>
-                ))}
-                {attempt.latencyMs !== null && (
-                  <span className="flex items-center gap-1">
-                    <Clock size={10} />
-                    {attempt.latencyMs < 1000
-                      ? `${attempt.latencyMs}ms`
-                      : `${(attempt.latencyMs / 1000).toFixed(1)}s`}
-                  </span>
-                )}
-                <span>{attempt.inputTokens + attempt.outputTokens} tokens</span>
-              </div>
+              <AgentThinkingTimeline steps={attempt.steps} />
             </div>
           );
         })}

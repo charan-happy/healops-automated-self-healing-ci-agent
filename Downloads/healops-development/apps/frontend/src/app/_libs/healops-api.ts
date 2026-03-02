@@ -21,6 +21,26 @@ function authHeaders(): Record<string, string> {
   return headers;
 }
 
+// ─── Auth Providers ─────────────────────────────────────────────────────────
+
+export interface AuthProviders {
+  email: boolean;
+  google: boolean;
+  github: boolean;
+  apple: boolean;
+}
+
+export async function fetchAuthProviders(): Promise<AuthProviders> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/auth/providers`);
+    if (!res.ok) return { email: true, google: false, github: false, apple: false };
+    const body = (await res.json()) as ApiEnvelope<AuthProviders>;
+    return body.data ?? { email: true, google: false, github: false, apple: false };
+  } catch {
+    return { email: true, google: false, github: false, apple: false };
+  }
+}
+
 // ─── Auth API ────────────────────────────────────────────────────────────────
 
 export interface TokenResponse {
@@ -112,6 +132,16 @@ export interface PipelinePatch {
   patchSize: number;
 }
 
+export interface AgentStep {
+  stage: string;
+  displayName: string;
+  status: "pending" | "running" | "completed" | "failed" | "skipped";
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  details?: string;
+}
+
 export interface PipelineAttempt {
   attemptNumber: number;
   latencyMs: number | null;
@@ -120,6 +150,7 @@ export interface PipelineAttempt {
   createdAt: string;
   patch: PipelinePatch | null;
   validations: PipelineValidation[];
+  steps?: AgentStep[];
 }
 
 export interface PipelinePullRequest {
@@ -438,4 +469,62 @@ export async function fetchSubscription(): Promise<Subscription | null> {
 
 export async function fetchUsageStats(): Promise<UsageStats | null> {
   return fetchApi<UsageStats>("/v1/healops/billing/usage");
+}
+
+// ─── Projects API ────────────────────────────────────────────────────────────
+
+export interface ProjectResponse {
+  id: string;
+  name: string;
+  repo: string;
+  provider: string;
+  branchCount: number;
+  defaultBranch: string;
+  lastActivity: string | null;
+}
+
+export interface BranchResponse {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  author: string;
+  commitCount: number;
+  lastCommit: string;
+  pipelineStatus: string;
+}
+
+export interface CommitResponse {
+  id: string;
+  sha: string;
+  fullSha: string;
+  message: string;
+  author: string;
+  timestamp: string;
+  source: string;
+  pipelineStatus: string;
+  agentFixCount: number;
+}
+
+export async function fetchProjectsList(): Promise<ProjectResponse[] | null> {
+  return fetchApi<ProjectResponse[]>("/v1/healops/projects");
+}
+
+export async function fetchProjectBranches(
+  repositoryId: string,
+  sync = true,
+): Promise<BranchResponse[] | null> {
+  return fetchApi<BranchResponse[]>(
+    `/v1/healops/projects/${repositoryId}/branches?sync=${String(sync)}`,
+  );
+}
+
+export async function fetchBranchCommits(
+  repositoryId: string,
+  branchId: string,
+  limit = 30,
+  offset = 0,
+): Promise<CommitResponse[] | null> {
+  return fetchApi<CommitResponse[]>(
+    `/v1/healops/projects/${repositoryId}/branches/${branchId}/commits?limit=${limit}&offset=${offset}`,
+  );
 }
