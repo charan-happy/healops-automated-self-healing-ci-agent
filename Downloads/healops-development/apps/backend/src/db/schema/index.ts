@@ -11,3 +11,5 @@ export * from './agent';
 export * from './outputs';
 export * from './intelligence';
 export * from './operations';
+export * from './billing';
+export * from './membership';

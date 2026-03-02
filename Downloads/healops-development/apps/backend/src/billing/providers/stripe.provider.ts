@@ -1,0 +1,89 @@
+// ─── Stripe Provider ────────────────────────────────────────────────────────
+// Wraps the Stripe SDK for checkout, portal, usage, and webhook operations.
+
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import Stripe from 'stripe';
+
+@Injectable()
+export class StripeProvider {
+  private readonly stripe: Stripe;
+  private readonly logger = new Logger(StripeProvider.name);
+
+  constructor(private readonly configService: ConfigService) {
+    this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY') ?? '');
+  }
+
+  /**
+   * Create a Stripe customer for an organization.
+   */
+  async createCustomer(
+    email: string,
+    name: string,
+    metadata: Record<string, string>,
+  ): Promise<Stripe.Customer> {
+    this.logger.debug(`Creating Stripe customer for ${email}`);
+    return this.stripe.customers.create({ email, name, metadata });
+  }
+
+  /**
+   * Create a Stripe Checkout session for plan upgrades.
+   */
+  async createCheckoutSession(
+    customerId: string,
+    priceId: string,
+    successUrl: string,
+    cancelUrl: string,
+  ): Promise<Stripe.Checkout.Session> {
+    return this.stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+  }
+
+  /**
+   * Create a Stripe Billing Portal session for subscription management.
+   */
+  async createPortalSession(
+    customerId: string,
+    returnUrl: string,
+  ): Promise<Stripe.BillingPortal.Session> {
+    return this.stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: returnUrl,
+    });
+  }
+
+  /**
+   * Report metered usage to Stripe via Billing Meter Events (Stripe v20+).
+   * Requires a Billing Meter to be configured with the given event name.
+   */
+  async reportUsage(
+    eventName: string,
+    stripeCustomerId: string,
+    value: number,
+  ): Promise<void> {
+    await this.stripe.billing.meterEvents.create({
+      event_name: eventName,
+      payload: {
+        stripe_customer_id: stripeCustomerId,
+        value: String(value),
+      },
+      timestamp: Math.floor(Date.now() / 1000),
+    });
+    this.logger.debug(
+      `Reported ${String(value)} usage units for meter event ${eventName} (customer ${stripeCustomerId})`,
+    );
+  }
+
+  /**
+   * Construct and verify a Stripe webhook event from a raw body and signature.
+   */
+  constructWebhookEvent(body: Buffer, signature: string): Stripe.Event {
+    const webhookSecret = this.configService.get('STRIPE_WEBHOOK_SECRET') ?? '';
+    return this.stripe.webhooks.constructEvent(body, signature, webhookSecret);
+  }
+}

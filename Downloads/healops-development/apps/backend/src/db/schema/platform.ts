@@ -20,6 +20,7 @@ import {
 export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull(),
+  slug: varchar('slug', { length: 100 }).notNull(),
   plan: varchar('plan', { length: 50 }).notNull().default('free'),
   slackWebhookUrl: varchar('slack_webhook_url', { length: 500 }),
   monthlyJobLimit: integer('monthly_job_limit').default(100),
@@ -47,6 +48,7 @@ export const repositories = pgTable(
     isActive: boolean('is_active').notNull().default(true),
     webhookSecret: varchar('webhook_secret', { length: 500 }),
     githubInstallationId: varchar('github_installation_id', { length: 100 }),
+    ciProviderConfigId: uuid('ci_provider_config_id'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
