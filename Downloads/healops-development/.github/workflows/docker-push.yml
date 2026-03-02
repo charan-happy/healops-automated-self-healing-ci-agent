@@ -1,0 +1,113 @@
+name: Build & Push Backend to GHCR (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-tag:
+        description: 'Custom image tag (e.g., v1.0.0, custom-tag). Defaults to short SHA if empty.'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/healops-backend
+
+jobs:
+  build-and-push:
+    name: Build & Push Backend Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tags
+        id: tags
+        run: |
+          CUSTOM_TAG="${{ inputs.image-tag }}"
+          SHORT_SHA="sha-$(echo ${{ github.sha }} | cut -c1-7)"
+          
+          if [ -z "$CUSTOM_TAG" ]; then
+            TAGS="${{ env.BACKEND_IMAGE }}:${SHORT_SHA},${{ env.BACKEND_IMAGE }}:latest"
+            echo "tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          else
+            TAGS="${{ env.BACKEND_IMAGE }}:${CUSTOM_TAG},${{ env.BACKEND_IMAGE }}:latest"
+            echo "tag=${CUSTOM_TAG}" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "final_tags=${TAGS}" >> $GITHUB_OUTPUT
+
+      - name: Build & Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Docker/dockerfile.backend
+          push: true
+          tags: ${{ steps.tags.outputs.final_tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Display Image Info
+        run: |
+          echo "✅ Backend Image pushed successfully!"
+          echo ""
+          echo "Image Details:"
+          echo "  Registry: ${{ env.REGISTRY }}"
+          echo "  Image: ${{ env.BACKEND_IMAGE }}"
+          echo "  Tags: ${{ steps.tags.outputs.final_tags }}"
+          echo ""
+          echo "Pull commands:"
+          echo "  docker pull ${{ env.BACKEND_IMAGE }}:${{ steps.tags.outputs.tag }}"
+          echo "  docker pull ${{ env.BACKEND_IMAGE }}:latest"
+
+      - name: Notify Slack (Success)
+        if: success()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "✅ Backend Docker Image Pushed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*✅ Backend Docker Image Pushed to GHCR*\n*Image:* `${{ env.BACKEND_IMAGE }}:${{ steps.tags.outputs.tag }}`\n*Triggered by:* ${{ github.actor }}\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify Slack (Failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "❌ Backend Docker Image Push Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*❌ Backend Docker Image Push Failed*\n*Image:* `${{ env.BACKEND_IMAGE }}`\n*Triggered by:* ${{ github.actor }}\n*View:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Workflow Run>"
+                  }
+                }
+              ]
+            }

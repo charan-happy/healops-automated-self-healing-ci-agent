@@ -1,0 +1,204 @@
+name: Build → GHCR → Deploy to EC2
+
+on:
+  push:
+    branches: [development]
+    paths-ignore:
+      - 'Infrastructure/**'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-south-1  # Mumbai region
+  BACKEND_IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/healops-backend
+  FRONTEND_IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/healops-frontend
+
+jobs:
+  build-and-push:
+    name: Build & Push to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write     # ✅ Required to push to GHCR (GitHub Packages)
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── Backend Image ──────────────────────────────────────────
+      - id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest
+            type=raw,value=dev   # ✅ :dev tag for local sandbox pulls
+
+      - name: Build & Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .                              # ✅ repo root (pnpm workspace)
+          file: Docker/dockerfile.backend         # ✅ correct path
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Frontend Image ─────────────────────────────────────────
+      - id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest
+            type=raw,value=dev
+
+      - name: Build & Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Docker/dockerfile.frontend        # ✅ correct path
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Copy docker-compose-prod.yml to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: docker-compose-prod.yml
+          target: /home/ubuntu/healops
+
+      - name: Deploy on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/ubuntu/healops
+
+            IMAGE_TAG="sha-$(echo ${{ github.sha }} | cut -c1-7)"
+
+            # Backup current image tags for rollback
+            if [ -f .env ]; then
+              grep "^BACKEND_IMAGE=" .env > .env.previous || true
+              grep "^FRONTEND_IMAGE=" .env >> .env.previous || true
+              echo "📝 Previous deployment backed up to .env.previous"
+            fi
+
+            # Login to ECR on EC2
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | \
+              docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+            # Update image tag in .env
+            sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/healops-backend:${IMAGE_TAG}|" .env
+            sed -i "s|^FRONTEND_IMAGE=.*|FRONTEND_IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/healops-frontend:${IMAGE_TAG}|" .env
+
+            # Pull new images
+            BACKEND_IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/healops-backend:${IMAGE_TAG} \
+            FRONTEND_IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/healops-frontend:${IMAGE_TAG} \
+              docker compose -f docker-compose-prod.yml pull
+
+            # Run migrations before starting app (compiled JS — no pnpm/ts-node needed)
+            docker compose -f docker-compose-prod.yml run --rm \
+              backend node dist/db/drizzle/migrate.js
+
+            # Seed error types (idempotent)
+            docker compose -f docker-compose-prod.yml run --rm \
+              backend node dist/db/seeds/seed-error-types.js
+
+            # Rolling restart — backend + worker + frontend
+            BACKEND_IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/healops-backend:${IMAGE_TAG} \
+            FRONTEND_IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/healops-frontend:${IMAGE_TAG} \
+              docker compose -f docker-compose-prod.yml up -d \
+              --no-deps backend worker frontend
+
+            # Health check on BACKEND (port 4000, /health endpoint)
+            sleep 20
+            curl -sf http://localhost:4000/health && \
+              echo "✅ Backend Deploy OK: ${IMAGE_TAG}" || \
+              { echo "❌ Backend health check failed"; exit 1; }
+
+            # Health check on FRONTEND (port 3000, /api/health endpoint)
+            sleep 10
+            curl -sf http://localhost:3000/api/health && \
+              echo "✅ Frontend Deploy OK: ${IMAGE_TAG}" || \
+              { echo "⚠️  Frontend health check failed"; }
+
+            docker image prune -f
+
+      - name: Notify Slack (Deploy Success)
+        if: success()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "🚀 Deploy Success",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "✅ *Deploy to EC2 - SUCCESS*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*Image Tag:* sha-${{ github.sha }}\n*Registry:* ECR\n*Host:* ${{ secrets.EC2_HOST }}"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify Slack (Deploy Failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "🚨 Deploy Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ *Deploy to EC2 - FAILED*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*View:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Workflow Run>"
+                  }
+                }
+              ]
+            }

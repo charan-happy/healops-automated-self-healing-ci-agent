@@ -1,0 +1,29 @@
+{
+    "name": "backend",
+    "$schema": "../../node_modules/nx/schemas/project-schema.json",
+    "sourceRoot": "apps/backend/src",
+    "projectType": "application",
+    "targets": {
+      "serve": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "pnpm run start:dev",
+          "cwd": "apps/backend"
+        }
+      },
+      "build": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "pnpm run build",
+          "cwd": "apps/backend"
+        }
+      },
+      "start": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "pnpm run start",
+          "cwd": "apps/backend"
+        }
+      }
+    }
+  }

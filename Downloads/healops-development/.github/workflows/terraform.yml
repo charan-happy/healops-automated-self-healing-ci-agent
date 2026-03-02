@@ -1,0 +1,151 @@
+name: Terraform Infrastructure
+
+on:
+  push:
+    branches: [development]
+    paths:
+      - 'Infrastructure/terraform/**'    # Only runs when terraform files change
+  pull_request:
+    branches: [development]
+    paths:
+      - 'Infrastructure/terraform/**'
+  workflow_dispatch:             # Manual trigger
+
+env:
+  TF_VERSION: "1.8.0"
+  AWS_REGION:  "ap-south-1"
+  WORKING_DIR: "Infrastructure/terraform"
+
+jobs:
+  terraform:
+    name: Terraform Plan & Apply
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write      # Post plan as PR comment
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      # ── On PR: show plan as comment ────────────────────────────────────────
+      - name: Terraform Plan
+        id: plan
+        if: github.event_name == 'pull_request'
+        run: |
+          terraform plan -no-color \
+            -var="postgres_password=${{ secrets.TF_POSTGRES_PASSWORD }}" \
+            -var="redis_password=${{ secrets.TF_REDIS_PASSWORD }}" \
+            -var="jwt_secret=${{ secrets.TF_JWT_SECRET }}" \
+            -var="github_app_id=${{ secrets.GITHUB_APP_ID }}" \
+            -var="github_app_private_key=${{ secrets.GITHUB_APP_PRIVATE_KEY }}" \
+            -var="github_webhook_secret=${{ secrets.GITHUB_WEBHOOK_SECRET }}" \
+            -var="openrouter_api_key=${{ secrets.OPENROUTER_API_KEY }}" \
+            -var="slack_webhook_url=${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -var="healops_webhook_api_key=${{ secrets.HEALOPS_WEBHOOK_API_KEY }}" \
+            -var="grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD }}" \
+            2>&1 | tee plan.txt
+        continue-on-error: true
+
+      - name: Post Plan as PR Comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ env.WORKING_DIR }}/plan.txt', 'utf8');
+            const truncated = plan.length > 60000
+              ? plan.slice(0, 60000) + '\n\n... (truncated)'
+              : plan;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Terraform Plan\n\`\`\`hcl\n${truncated}\n\`\`\``
+            });
+
+      # ── On push to development: auto-apply ────────────────────────────────
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/development' && github.event_name == 'push'
+        run: |
+          terraform apply -auto-approve \
+            -var="postgres_password=${{ secrets.TF_POSTGRES_PASSWORD }}" \
+            -var="redis_password=${{ secrets.TF_REDIS_PASSWORD }}" \
+            -var="jwt_secret=${{ secrets.TF_JWT_SECRET }}" \
+            -var="github_app_id=${{ secrets.GITHUB_APP_ID }}" \
+            -var="github_app_private_key=${{ secrets.GITHUB_APP_PRIVATE_KEY }}" \
+            -var="github_webhook_secret=${{ secrets.GITHUB_WEBHOOK_SECRET }}" \
+            -var="openrouter_api_key=${{ secrets.OPENROUTER_API_KEY }}" \
+            -var="slack_webhook_url=${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -var="healops_webhook_api_key=${{ secrets.HEALOPS_WEBHOOK_API_KEY }}" \
+            -var="grafana_admin_password=${{ secrets.GRAFANA_ADMIN_PASSWORD }}"
+
+      - name: Print Outputs
+        if: github.ref == 'refs/heads/development' && github.event_name == 'push'
+        run: terraform output
+
+      - name: Notify Slack (Terraform Plan - PR)
+        if: github.event_name == 'pull_request' && always()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "Terraform Plan: ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Terraform Plan - PR*\n*Status:* ${{ job.status == 'success' && '✅ PASSED' || '❌ FAILED' }}\n*PR:* <${{ github.server_url }}/${{ github.repository }}/pull/${{ github.event.pull_request.number }}|#${{ github.event.pull_request.number }}>\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify Slack (Terraform Apply - Push)
+        if: github.ref == 'refs/heads/development' && github.event_name == 'push' && always()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "Terraform Apply: ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Terraform Apply - Development*\n*Status:* ${{ job.status == 'success' && '🚀 APPLIED' || '❌ FAILED' }}\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*Workflow:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                  }
+                }
+              ]
+            }
