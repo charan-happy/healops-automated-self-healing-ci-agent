@@ -60,6 +60,11 @@ export function RecentActivityFeed({
           <h3 className="text-lg font-semibold">Recent Activity</h3>
           <p className="text-sm text-muted-foreground">Latest repair jobs</p>
         </div>
+        {jobs && jobs.length > 0 && (
+          <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-medium text-muted-foreground">
+            {jobs.length} jobs
+          </span>
+        )}
       </div>
 
       {loading || !jobs ? (
