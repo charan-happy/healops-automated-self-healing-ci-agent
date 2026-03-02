@@ -192,6 +192,7 @@ describe('GithubWebhookService', () => {
         externalRepoId: '999',
         isActive: true,
         webhookSecret: null,
+        ciProviderConfigId: null,
         createdAt: new Date(),
         deletedAt: null,
       });
@@ -218,6 +219,7 @@ describe('GithubWebhookService', () => {
         externalRepoId: '999',
         isActive: true,
         webhookSecret: null,
+        ciProviderConfigId: null,
         createdAt: new Date(),
         deletedAt: null,
       });
@@ -259,6 +261,7 @@ describe('GithubWebhookService', () => {
         externalRepoId: '999',
         isActive: true,
         webhookSecret: null,
+        ciProviderConfigId: null,
         createdAt: new Date(),
         deletedAt: null,
       });
@@ -316,6 +319,7 @@ describe('GithubWebhookService', () => {
         externalRepoId: '999',
         isActive: true,
         webhookSecret: null,
+        ciProviderConfigId: null,
         createdAt: new Date(),
         deletedAt: null,
       });

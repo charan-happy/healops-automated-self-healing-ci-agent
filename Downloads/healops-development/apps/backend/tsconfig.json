@@ -85,7 +85,12 @@
       "@validator/*": ["validator/*"],
       "@slack/*": ["slack/*"],
       "@vector-memory/*": ["vector-memory/*"],
-      "@cost-tracking/*": ["cost-tracking/*"]
+      "@cost-tracking/*": ["cost-tracking/*"],
+      "@ci-provider/*": ["ci-provider/*"],
+      "@ci-webhook/*": ["ci-webhook/*"],
+      "@billing/*": ["billing/*"],
+      "@onboarding/*": ["onboarding/*"],
+      "@dashboard/*": ["dashboard/*"]
     }
   },
   "include": [

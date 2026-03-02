@@ -120,6 +120,55 @@
       "when": 1772302329502,
       "tag": "0016_add-agent-branch",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1772553600000,
+      "tag": "0017_add_fix_attempt",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1772640000000,
+      "tag": "0018_multi_ci_provider_configs",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1772726400000,
+      "tag": "0019_billing_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1772812800000,
+      "tag": "0020_organization_members",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1772899200000,
+      "tag": "0021_onboarding_progress",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1772985600000,
+      "tag": "0022_notification_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1773072000000,
+      "tag": "0023_dashboard_snapshots",
+      "breakpoints": true
     }
   ]
 }

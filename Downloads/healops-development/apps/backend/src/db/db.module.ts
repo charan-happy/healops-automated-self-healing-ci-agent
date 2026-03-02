@@ -27,6 +27,12 @@ import { VectorMemoryRepository } from './repositories/healops/vector-memory.rep
 import { CostTrackingRepository } from './repositories/healops/cost-tracking.repository';
 import { HealopsAuditLogRepository } from './repositories/healops/audit-log.repository';
 import { FixRequestsRepository } from './repositories/healops/fix-requests.repository';
+import { CiProviderConfigsRepository } from './repositories/healops/ci-provider-configs.repository';
+import { BillingRepository } from './repositories/healops/billing.repository';
+import { MembershipRepository } from './repositories/healops/membership.repository';
+import { OnboardingRepository } from './repositories/healops/onboarding.repository';
+import { NotificationSettingsRepository } from './repositories/healops/notification-settings.repository';
+import { DashboardRepository } from './repositories/healops/dashboard.repository';
 
 const repositories = [
   AuthRepository,
@@ -52,6 +58,13 @@ const repositories = [
   CostTrackingRepository,
   HealopsAuditLogRepository,
   FixRequestsRepository,
+  // New: multi-CI, billing, membership, onboarding
+  CiProviderConfigsRepository,
+  BillingRepository,
+  MembershipRepository,
+  OnboardingRepository,
+  NotificationSettingsRepository,
+  DashboardRepository,
 ];
 
 @Global()

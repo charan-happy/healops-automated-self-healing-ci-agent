@@ -58,7 +58,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/",
-        destination: "/projects",
+        destination: "/dashboard",
       },
     
     ];
