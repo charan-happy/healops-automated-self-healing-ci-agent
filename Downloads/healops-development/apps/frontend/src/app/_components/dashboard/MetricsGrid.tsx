@@ -12,11 +12,11 @@ interface MetricsGridProps {
 export function MetricsGrid({ metrics, loading }: MetricsGridProps) {
   if (loading || !metrics) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
-            className="h-36 animate-pulse rounded-xl border border-white/10 bg-white/5"
+            className="h-[140px] animate-pulse rounded-xl border border-white/10 bg-white/5"
           />
         ))}
       </div>
@@ -24,7 +24,7 @@ export function MetricsGrid({ metrics, loading }: MetricsGridProps) {
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard
         title="Mean Time to Repair"
         value={metrics.mttr}

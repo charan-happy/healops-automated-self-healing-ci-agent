@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
+// Public routes that don't require authentication
+const PUBLIC_PATHS = ["/login", "/register", "/pricing", "/unauthorized", "/forbidden"];
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -16,42 +20,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-    const res = await fetch(`${BACKEND_URL}/v1/healops/onboarding/status`, {
-      signal: controller.signal,
-      headers: {
-        cookie: request.headers.get("cookie") ?? "",
-      },
-    });
-    clearTimeout(timeoutId);
-
-    // Backend unreachable or error — fail open, let user through
-    if (!res.ok) {
-      return NextResponse.next();
-    }
-
-    const body = (await res.json()) as {
-      data?: { isComplete?: boolean };
-    };
-    const isComplete = body?.data?.isComplete === true;
-
-    // Completed user trying to access /onboarding → redirect to /dashboard
-    if (pathname.startsWith("/onboarding") && isComplete) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-
-    // Incomplete user trying to access dashboard routes → redirect to /onboarding
-    if (!pathname.startsWith("/onboarding") && !isComplete) {
-      return NextResponse.redirect(new URL("/onboarding", request.url));
-    }
-  } catch {
-    // Backend unreachable — fail open
+  // Public paths always allowed
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
+  // For all other routes, the client-side AuthContext handles redirect to /login
+  // Middleware just passes through — auth state is managed in the browser via JWT
   return NextResponse.next();
 }
 

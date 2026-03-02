@@ -40,6 +40,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useOrg } from "@/app/_libs/context/OrgContext";
+import { useAuth } from "@/app/_libs/context/AuthContext";
 
 const settingsSubItems = [
   { title: "Organization", href: "/settings/organization" as const, icon: Building2 },
@@ -66,6 +67,7 @@ function isNavActive(pathname: string, href: string): boolean {
 export function AppSidebar() {
   const pathname = usePathname();
   const { onboardingStatus, subscription } = useOrg();
+  const { user, logout } = useAuth();
 
   const orgName =
     (onboardingStatus?.data?.organization as { name?: string } | undefined)
@@ -189,9 +191,32 @@ export function AppSidebar() {
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{orgName}</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {planName}
+                  {user?.email ?? planName}
                 </span>
               </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={logout}
+              className="text-muted-foreground hover:text-red-400"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              <span>Log out</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
