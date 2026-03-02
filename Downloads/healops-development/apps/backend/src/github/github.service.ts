@@ -471,6 +471,34 @@ export class GithubService {
   }
 
   /**
+   * List all branches for a repository.
+   */
+  async listBranches(
+    installationId: string,
+    owner: string,
+    repo: string,
+  ): Promise<Array<{ name: string; isProtected: boolean }>> {
+    try {
+      const octokit = await this.githubApp.getInstallationClient(installationId);
+      const { data } = await octokit.repos.listBranches({
+        owner,
+        repo,
+        per_page: 100,
+      });
+      return data.map((b) => ({
+        name: b.name,
+        isProtected: b.protected,
+      }));
+    } catch (error) {
+      if (this.is404(error)) return [];
+      this.logger.error(
+        `Failed to list branches for ${owner}/${repo}: ${(error as Error).message}`,
+      );
+      return [];
+    }
+  }
+
+  /**
    * Expose the app provider for services that need direct Octokit access.
    */
   getAppProvider(): GithubAppProvider {

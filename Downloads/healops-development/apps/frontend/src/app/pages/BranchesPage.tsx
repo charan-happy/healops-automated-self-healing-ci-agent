@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import BranchList from "../_components/BranchList";
 import PageTransition from "../_components/PageTransition";
 import { GitBranch, Loader2, Search } from "lucide-react";
-import { fetchBranches } from "../_libs/github/github-service";
+import { fetchProjectBranches } from "../_libs/healops-api";
+import type { BranchResponse } from "../_libs/healops-api";
 import { mockBranches } from "../_libs/mockData";
 import type { Branch } from "../_libs/mockData";
 
@@ -24,8 +25,7 @@ const BranchesPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("projectId");
-
-  const [owner, repo] = projectId?.includes("--") ? projectId.split("--") : [null, null];
+  const repoId = searchParams?.get("repoId");
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,21 +33,38 @@ const BranchesPage = () => {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    if (!owner || !repo) {
-      // Demo mode — use mock branches for simple IDs
-      if (projectId) {
-        setBranches(DEMO_BRANCHES[projectId] ?? []);
-      }
-      setLoading(false);
+    if (repoId) {
+      // Use backend API
+      fetchProjectBranches(repoId)
+        .then((data) => {
+          if (data && data.length > 0) {
+            setBranches(
+              data.map((b: BranchResponse) => ({
+                id: b.name,
+                name: b.name,
+                author: b.author,
+                commitCount: b.commitCount,
+                lastCommit: b.lastCommit || "—",
+                pipelineStatus: "pending" as const,
+              })),
+            );
+          } else if (projectId) {
+            setBranches(DEMO_BRANCHES[projectId] ?? []);
+          }
+        })
+        .catch(() => {
+          if (projectId) setBranches(DEMO_BRANCHES[projectId] ?? []);
+        })
+        .finally(() => setLoading(false));
       return;
     }
-    fetchBranches(owner, repo)
-      .then(setBranches)
-      .catch(() => {
-        if (projectId) setBranches(DEMO_BRANCHES[projectId] ?? []);
-      })
-      .finally(() => setLoading(false));
-  }, [owner, repo, projectId]);
+
+    // Demo mode — use mock branches for simple IDs
+    if (projectId) {
+      setBranches(DEMO_BRANCHES[projectId] ?? []);
+    }
+    setLoading(false);
+  }, [repoId, projectId]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return branches;
@@ -99,7 +116,7 @@ const BranchesPage = () => {
         selectedBranchId={null}
         onSelectBranch={(id) =>
           projectId
-            ? router.push(`/commits?projectId=${projectId}&branchId=${id}`)
+            ? router.push(`/commits?projectId=${projectId}${repoId ? `&repoId=${repoId}` : ""}&branchId=${id}`)
             : undefined
         }
       />

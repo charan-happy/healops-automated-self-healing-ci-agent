@@ -5,8 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import CommitTimeline from "../_components/CommitTimeline";
 import { GitCommit, Loader2, Search } from "lucide-react";
 import PageTransition from "../_components/PageTransition";
-import { fetchCommits } from "../_libs/github/github-service";
-import { fetchPipelineStatus } from "../_libs/healops-api";
+import { fetchBranchCommits, fetchPipelineStatus } from "../_libs/healops-api";
+import type { CommitResponse } from "../_libs/healops-api";
 import { mockCommits } from "../_libs/mockData";
 import type { Commit, PipelineStatus } from "../_libs/mockData";
 
@@ -74,9 +74,8 @@ const CommitsPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
+  const repoId = searchParams.get("repoId");
   const branchId = searchParams.get("branchId");
-
-  const [owner, repo] = projectId?.includes("--") ? projectId.split("--") : [null, null];
 
   const cacheKey = `${projectId}:${branchId}`;
   const cached = commitsCache.get(cacheKey);
@@ -90,7 +89,14 @@ const CommitsPage = () => {
   useEffect(() => {
     cacheKeyRef.current = cacheKey;
 
-    if (!owner || !repo || !branchId) {
+    // If we have cached data, show it immediately — no loading spinner
+    if (cached) {
+      setCommits(cached);
+      setLoading(false);
+      return;
+    }
+
+    if (!repoId || !branchId) {
       // Demo mode — show mock commits for the branch
       if (branchId && mockCommits[branchId]) {
         setCommits(mockCommits[branchId]);
@@ -99,16 +105,28 @@ const CommitsPage = () => {
       return;
     }
 
-    // If we have cached data, show it immediately — no loading spinner
-    if (cached) {
-      setCommits(cached);
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
 
-    fetchCommits(owner, repo, branchId)
+    fetchBranchCommits(repoId, branchId)
+      .then((data) => {
+        if (!data || data.length === 0) {
+          // Fallback to demo commits
+          if (branchId && mockCommits[branchId]) {
+            return mockCommits[branchId];
+          }
+          return [] as Commit[];
+        }
+        // Map backend response to Commit type
+        return data.map((c: CommitResponse) => ({
+          id: c.fullSha || c.id,
+          sha: c.sha,
+          message: c.message,
+          author: c.author,
+          timestamp: c.timestamp,
+          pipelineStatus: "pending" as PipelineStatus,
+          agentFixCount: c.agentFixCount,
+        }));
+      })
       .then((commitList) => enrichCommitsWithPipelineStatus(commitList))
       .then((enriched) => {
         if (!cancelled) {
@@ -128,7 +146,7 @@ const CommitsPage = () => {
       });
 
     return () => { cancelled = true; };
-  }, [owner, repo, branchId, cacheKey, cached]);
+  }, [repoId, branchId, cacheKey, cached]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return commits;
@@ -188,7 +206,7 @@ const CommitsPage = () => {
             onSelectCommit={(id) =>
               projectId && branchId
                 ? router.push(
-                    `/fix-details?projectId=${projectId}&branchId=${branchId}&commitId=${id}`,
+                    `/fix-details?projectId=${projectId}${repoId ? `&repoId=${repoId}` : ""}&branchId=${branchId}&commitId=${id}`,
                   )
                 : undefined
             }

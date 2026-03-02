@@ -5,6 +5,15 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Separator } from "@/components/ui/separator";
 import { AppSidebar } from "@/app/_components/AppSidebar";
 import AppBreadcrumb from "@/app/_components/AppBreadcrumb";
+import { Heart } from "lucide-react";
+
+const contributors = [
+  { name: "Deepanshu Goyal", gradient: "from-cyan-400 via-emerald-400 to-teal-300" },
+  { name: "Jahnavi Sardana", gradient: "from-violet-400 via-purple-400 to-fuchsia-400" },
+  { name: "Nagacharan Gudiyatham", gradient: "from-amber-400 via-orange-400 to-rose-400" },
+  { name: "Ashish Gour", gradient: "from-sky-400 via-blue-400 to-indigo-400" },
+  { name: "Vikas Goyal", gradient: "from-emerald-400 via-green-400 to-lime-400" },
+];
 
 export default function DashboardLayout({
   children,
@@ -14,15 +23,45 @@ export default function DashboardLayout({
   return (
     <SidebarProvider className="h-screen bg-grid-pattern bg-ambient-glow">
       <AppSidebar />
-      <SidebarInset>
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-card/80 backdrop-blur-xl px-6">
+      <SidebarInset className="!min-h-0 h-screen flex flex-col overflow-hidden">
+        <header className="z-30 flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-card/80 backdrop-blur-xl px-6">
           <SidebarTrigger className="-ml-1 size-7 text-muted-foreground hover:text-foreground" />
           <Separator orientation="vertical" className="mr-2 h-4 bg-white/10" />
           <Suspense fallback={null}>
             <AppBreadcrumb />
           </Suspense>
         </header>
-        <div className="flex-1 overflow-auto">{children}</div>
+        <div className="flex-1 overflow-y-auto">
+          {children}
+
+          {/* ─── Contributors Footer ─── */}
+          <footer className="border-t border-white/[0.06] px-6 py-6">
+            <div className="mx-auto max-w-5xl">
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 backdrop-blur-sm">
+                <div className="mb-3 flex items-center justify-center gap-2">
+                  <Heart className="size-3.5 text-rose-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Built with passion by
+                  </span>
+                  <Heart className="size-3.5 text-rose-400" />
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {contributors.map((c) => (
+                    <span
+                      key={c.name}
+                      className={`inline-block rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-xs font-bold bg-gradient-to-r ${c.gradient} bg-clip-text text-transparent transition-all hover:scale-105 hover:border-white/[0.15] hover:bg-white/[0.08] hover:shadow-lg`}
+                    >
+                      {c.name}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-center text-[10px] text-muted-foreground/40">
+                  &copy; {new Date().getFullYear()} HealOps &mdash; Autonomous Pipeline Healing
+                </p>
+              </div>
+            </div>
+          </footer>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

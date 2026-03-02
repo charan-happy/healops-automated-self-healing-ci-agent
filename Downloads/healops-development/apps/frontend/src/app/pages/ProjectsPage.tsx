@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { FolderGit2, GitBranch, GitCommit, ArrowRight, Loader2, Search, ChevronDown, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../_components/PageTransition";
-import { fetchRepos, fetchBranches } from "../_libs/github/github-service";
+import { fetchProjectsList, fetchProjectBranches } from "../_libs/healops-api";
+import type { ProjectResponse, BranchResponse } from "../_libs/healops-api";
 import { mockProjects, mockBranches } from "../_libs/mockData";
 import type { Project, Branch } from "../_libs/mockData";
 import { trackEvent, POSTHOG_EVENTS } from "../_libs/utils/analytics";
@@ -44,14 +45,37 @@ const ProjectsPage = () => {
   const [search, setSearch] = useState("");
   const [isDemo, setIsDemo] = useState(false);
 
+  // Map project display ID → backend UUID for API calls
+  const [repoIdMap, setRepoIdMap] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [branchesMap, setBranchesMap] = useState<Record<string, Branch[]>>({});
   const [branchLoading, setBranchLoading] = useState<string | null>(null);
 
   useEffect(() => {
     trackEvent(POSTHOG_EVENTS.PROJECTS_VIEWED);
-    fetchRepos()
-      .then(setProjects)
+    fetchProjectsList()
+      .then((data) => {
+        if (!data || data.length === 0) {
+          setProjects(DEMO_PROJECTS);
+          setIsDemo(true);
+          return;
+        }
+        const idMap: Record<string, string> = {};
+        const mapped: Project[] = data.map((r: ProjectResponse) => {
+          const displayId = r.repo.replace("/", "--");
+          idMap[displayId] = r.id;
+          return {
+            id: displayId,
+            name: r.name,
+            repo: r.repo,
+            branchCount: r.branchCount,
+            lastActivity: r.lastActivity ?? "—",
+            provider: r.provider,
+          };
+        });
+        setRepoIdMap(idMap);
+        setProjects(mapped);
+      })
       .catch(() => {
         setProjects(DEMO_PROJECTS);
         setIsDemo(true);
@@ -76,13 +100,25 @@ const ProjectsPage = () => {
         return;
       }
 
-      const [owner, repo] = projectId.split("--");
-      if (!owner || !repo) return;
+      const backendId = repoIdMap[projectId];
+      if (!backendId) return;
 
       setBranchLoading(projectId);
       try {
-        const branches = await fetchBranches(owner, repo);
-        setBranchesMap((prev) => ({ ...prev, [projectId]: branches }));
+        const data = await fetchProjectBranches(backendId);
+        if (data) {
+          const mapped: Branch[] = data.map((b: BranchResponse) => ({
+            id: b.name,
+            name: b.name,
+            author: b.author,
+            commitCount: b.commitCount,
+            lastCommit: b.lastCommit || "—",
+            pipelineStatus: "pending" as const,
+          }));
+          setBranchesMap((prev) => ({ ...prev, [projectId]: mapped }));
+        } else {
+          setBranchesMap((prev) => ({ ...prev, [projectId]: [] }));
+        }
       } catch {
         // Fallback to demo branches
         const demoBranches = DEMO_BRANCHES[projectId] ?? [];
@@ -91,7 +127,7 @@ const ProjectsPage = () => {
         setBranchLoading(null);
       }
     },
-    [expandedId, branchesMap, isDemo],
+    [expandedId, branchesMap, isDemo, repoIdMap],
   );
 
   const filtered = useMemo(() => {
@@ -208,7 +244,7 @@ const ProjectsPage = () => {
                           <motion.button
                             key={branch.id}
                             onClick={() =>
-                              router.push(`/commits?projectId=${project.id}&branchId=${branch.id}`)
+                              router.push(`/commits?projectId=${project.id}&repoId=${repoIdMap[project.id] ?? ""}&branchId=${branch.id}`)
                             }
                             initial={{ opacity: 0, x: -8 }}
                             animate={{ opacity: 1, x: 0 }}

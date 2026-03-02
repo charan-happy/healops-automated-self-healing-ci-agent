@@ -40,6 +40,16 @@ export class AuthController {
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3099';
   }
 
+  // ─── Provider Availability ───────────────────────────────────────────────
+
+  @Get('providers')
+  @Public()
+  @ApiOperation({ summary: 'Get available auth providers' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Returns available auth providers' })
+  getProviders(): { email: boolean; google: boolean; github: boolean; apple: boolean } {
+    return this.authService.getAvailableProviders();
+  }
+
   // ─── Registration & Login ──────────────────────────────────────────────────
 
   @Post('register')

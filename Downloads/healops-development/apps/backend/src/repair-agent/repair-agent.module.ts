@@ -20,6 +20,8 @@ import { GithubModule } from '../github/github.module';
 import { CiProviderModule } from '../ci-provider/ci-provider.module';
 import { VectorMemoryModule } from '../vector-memory/vector-memory.module';
 import { ValidatorModule } from '../validator/validator.module';
+import { GatewayModule } from '../gateway/gateway.module';
+import { MetricsModule } from '../api/metrics/metrics.module';
 import { RepairAgentService } from './repair-agent.service';
 import { PromptBuilderService } from './services/prompt-builder.service';
 import { LogParserService } from './services/log-parser.service';
@@ -34,6 +36,8 @@ import { QualityGateService } from './services/quality-gate.service';
     CiProviderModule,
     VectorMemoryModule,
     ValidatorModule,
+    GatewayModule,
+    MetricsModule,
   ],
   providers: [
     RepairAgentService,

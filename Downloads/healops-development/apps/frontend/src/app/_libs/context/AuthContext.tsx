@@ -45,7 +45,7 @@ const REFRESH_TOKEN_KEY = "healops_refresh_token";
 const USER_KEY = "healops_user";
 
 // Public routes that don't need auth
-const PUBLIC_PATHS = ["/login", "/register", "/pricing", "/unauthorized", "/auth/callback", "/onboarding"];
+const PUBLIC_PATHS = ["/", "/login", "/register", "/pricing", "/unauthorized", "/auth/callback", "/onboarding"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p));

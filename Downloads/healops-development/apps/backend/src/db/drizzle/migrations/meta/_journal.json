@@ -169,6 +169,13 @@
       "when": 1773072000000,
       "tag": "0023_dashboard_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1772468976781,
+      "tag": "0024_add_steps_to_attempts",
+      "breakpoints": true
     }
   ]
 }

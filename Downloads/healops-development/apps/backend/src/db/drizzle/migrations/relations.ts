@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { users, refreshTokens, apiKeys, mfaSettings, oauthAccounts, media, notifications, deviceTokens, documents, documentChunks, conversations, messages, webhooks, webhookDeliveries, organizations, repositories, repositorySettings, branches, commits, pipelineRuns, webhookEvents, failures, errorTypes, flakyFailureRegistry, jobs, fixRequests, attempts, patches, validations, pullRequests, escalations, vectorMemory, slackNotifications, costTracking, jobCooldowns, roles, rolePermissions, permissions, userRoles } from "./schema";
+import { users, refreshTokens, apiKeys, mfaSettings, oauthAccounts, media, notifications, deviceTokens, documents, documentChunks, conversations, messages, webhooks, webhookDeliveries, ciHealingRuns, ciHealingAttempts, ciHealingEvents, repositories, repositorySettings, branches, commits, pipelineRuns, webhookEvents, organizations, ciProviderConfigs, failures, jobs, fixRequests, attempts, errorTypes, flakyFailureRegistry, patches, validations, pullRequests, escalations, vectorMemory, slackNotifications, costTracking, jobCooldowns, subscriptions, plans, usageRecords, notificationSettings, invoices, organizationMembers, organizationInvitations, onboardingProgress, dashboardSnapshots, roles, rolePermissions, permissions, userRoles } from "./schema";
 
 export const refreshTokensRelations = relations(refreshTokens, ({one}) => ({
 	user: one(users, {
@@ -18,6 +18,15 @@ export const usersRelations = relations(users, ({many}) => ({
 	deviceTokens: many(deviceTokens),
 	conversations: many(conversations),
 	webhooks: many(webhooks),
+	notificationSettings: many(notificationSettings),
+	organizationMembers_userId: many(organizationMembers, {
+		relationName: "organizationMembers_userId_users_id"
+	}),
+	organizationMembers_invitedBy: many(organizationMembers, {
+		relationName: "organizationMembers_invitedBy_users_id"
+	}),
+	organizationInvitations: many(organizationInvitations),
+	onboardingProgresses: many(onboardingProgress),
 	userRoles: many(userRoles),
 }));
 
@@ -104,24 +113,23 @@ export const webhookDeliveriesRelations = relations(webhookDeliveries, ({one}) =
 	}),
 }));
 
-export const repositoriesRelations = relations(repositories, ({one, many}) => ({
-	organization: one(organizations, {
-		fields: [repositories.organizationId],
-		references: [organizations.id]
+export const ciHealingAttemptsRelations = relations(ciHealingAttempts, ({one}) => ({
+	ciHealingRun: one(ciHealingRuns, {
+		fields: [ciHealingAttempts.runId],
+		references: [ciHealingRuns.id]
 	}),
-	repositorySettings: many(repositorySettings),
-	branches: many(branches),
-	commits: many(commits),
-	webhookEvents: many(webhookEvents),
-	flakyFailureRegistries: many(flakyFailureRegistry),
-	vectorMemories: many(vectorMemory),
-	costTrackings: many(costTracking),
-	jobCooldowns: many(jobCooldowns),
 }));
 
-export const organizationsRelations = relations(organizations, ({many}) => ({
-	repositories: many(repositories),
-	costTrackings: many(costTracking),
+export const ciHealingRunsRelations = relations(ciHealingRuns, ({many}) => ({
+	ciHealingAttempts: many(ciHealingAttempts),
+	ciHealingEvents: many(ciHealingEvents),
+}));
+
+export const ciHealingEventsRelations = relations(ciHealingEvents, ({one}) => ({
+	ciHealingRun: one(ciHealingRuns, {
+		fields: [ciHealingEvents.runId],
+		references: [ciHealingRuns.id]
+	}),
 }));
 
 export const repositorySettingsRelations = relations(repositorySettings, ({one}) => ({
@@ -131,24 +139,32 @@ export const repositorySettingsRelations = relations(repositorySettings, ({one})
 	}),
 }));
 
+export const repositoriesRelations = relations(repositories, ({one, many}) => ({
+	repositorySettings: many(repositorySettings),
+	branches: many(branches),
+	commits: many(commits),
+	webhookEvents: many(webhookEvents),
+	organization: one(organizations, {
+		fields: [repositories.organizationId],
+		references: [organizations.id]
+	}),
+	ciProviderConfig: one(ciProviderConfigs, {
+		fields: [repositories.ciProviderConfigId],
+		references: [ciProviderConfigs.id]
+	}),
+	flakyFailureRegistries: many(flakyFailureRegistry),
+	vectorMemories: many(vectorMemory),
+	costTrackings: many(costTracking),
+	jobCooldowns: many(jobCooldowns),
+	dashboardSnapshots: many(dashboardSnapshots),
+}));
+
 export const branchesRelations = relations(branches, ({one, many}) => ({
 	repository: one(repositories, {
 		fields: [branches.repositoryId],
 		references: [repositories.id]
 	}),
 	commits: many(commits),
-}));
-
-export const commitsRelations = relations(commits, ({one, many}) => ({
-	repository: one(repositories, {
-		fields: [commits.repositoryId],
-		references: [repositories.id]
-	}),
-	branch: one(branches, {
-		fields: [commits.branchId],
-		references: [branches.id]
-	}),
-	pipelineRuns: many(pipelineRuns),
 }));
 
 export const pipelineRunsRelations = relations(pipelineRuns, ({one, many}) => ({
@@ -160,8 +176,20 @@ export const pipelineRunsRelations = relations(pipelineRuns, ({one, many}) => ({
 		fields: [pipelineRuns.webhookEventId],
 		references: [webhookEvents.id]
 	}),
-	failures: many(failures),
 	attempts: many(attempts),
+	failures: many(failures),
+}));
+
+export const commitsRelations = relations(commits, ({one, many}) => ({
+	pipelineRuns: many(pipelineRuns),
+	repository: one(repositories, {
+		fields: [commits.repositoryId],
+		references: [repositories.id]
+	}),
+	branch: one(branches, {
+		fields: [commits.branchId],
+		references: [branches.id]
+	}),
 }));
 
 export const webhookEventsRelations = relations(webhookEvents, ({one, many}) => ({
@@ -172,26 +200,25 @@ export const webhookEventsRelations = relations(webhookEvents, ({one, many}) => 
 	}),
 }));
 
-export const failuresRelations = relations(failures, ({one, many}) => ({
-	pipelineRun: one(pipelineRuns, {
-		fields: [failures.pipelineRunId],
-		references: [pipelineRuns.id]
-	}),
-	errorType: one(errorTypes, {
-		fields: [failures.errorTypeId],
-		references: [errorTypes.id]
-	}),
-	jobs: many(jobs),
+export const organizationsRelations = relations(organizations, ({many}) => ({
+	repositories: many(repositories),
+	costTrackings: many(costTracking),
+	ciProviderConfigs: many(ciProviderConfigs),
+	subscriptions: many(subscriptions),
+	usageRecords: many(usageRecords),
+	notificationSettings: many(notificationSettings),
+	invoices: many(invoices),
+	organizationMembers: many(organizationMembers),
+	organizationInvitations: many(organizationInvitations),
+	onboardingProgresses: many(onboardingProgress),
+	dashboardSnapshots: many(dashboardSnapshots),
 }));
 
-export const errorTypesRelations = relations(errorTypes, ({many}) => ({
-	failures: many(failures),
-}));
-
-export const flakyFailureRegistryRelations = relations(flakyFailureRegistry, ({one}) => ({
-	repository: one(repositories, {
-		fields: [flakyFailureRegistry.repositoryId],
-		references: [repositories.id]
+export const ciProviderConfigsRelations = relations(ciProviderConfigs, ({one, many}) => ({
+	repositories: many(repositories),
+	organization: one(organizations, {
+		fields: [ciProviderConfigs.organizationId],
+		references: [organizations.id]
 	}),
 }));
 
@@ -213,6 +240,18 @@ export const jobsRelations = relations(jobs, ({one, many}) => ({
 	jobCooldowns: many(jobCooldowns),
 	fixRequests: many(fixRequests, {
 		relationName: "fixRequests_jobId_jobs_id"
+	}),
+}));
+
+export const failuresRelations = relations(failures, ({one, many}) => ({
+	jobs: many(jobs),
+	pipelineRun: one(pipelineRuns, {
+		fields: [failures.pipelineRunId],
+		references: [pipelineRuns.id]
+	}),
+	errorType: one(errorTypes, {
+		fields: [failures.errorTypeId],
+		references: [errorTypes.id]
 	}),
 }));
 
@@ -238,6 +277,17 @@ export const attemptsRelations = relations(attempts, ({one, many}) => ({
 	}),
 	patches: many(patches),
 	validations: many(validations),
+}));
+
+export const errorTypesRelations = relations(errorTypes, ({many}) => ({
+	failures: many(failures),
+}));
+
+export const flakyFailureRegistryRelations = relations(flakyFailureRegistry, ({one}) => ({
+	repository: one(repositories, {
+		fields: [flakyFailureRegistry.repositoryId],
+		references: [repositories.id]
+	}),
 }));
 
 export const patchesRelations = relations(patches, ({one}) => ({
@@ -305,6 +355,101 @@ export const jobCooldownsRelations = relations(jobCooldowns, ({one}) => ({
 	job: one(jobs, {
 		fields: [jobCooldowns.triggeredByJobId],
 		references: [jobs.id]
+	}),
+}));
+
+export const subscriptionsRelations = relations(subscriptions, ({one, many}) => ({
+	organization: one(organizations, {
+		fields: [subscriptions.organizationId],
+		references: [organizations.id]
+	}),
+	plan: one(plans, {
+		fields: [subscriptions.planId],
+		references: [plans.id]
+	}),
+	usageRecords: many(usageRecords),
+}));
+
+export const plansRelations = relations(plans, ({many}) => ({
+	subscriptions: many(subscriptions),
+}));
+
+export const usageRecordsRelations = relations(usageRecords, ({one}) => ({
+	organization: one(organizations, {
+		fields: [usageRecords.organizationId],
+		references: [organizations.id]
+	}),
+	subscription: one(subscriptions, {
+		fields: [usageRecords.subscriptionId],
+		references: [subscriptions.id]
+	}),
+}));
+
+export const notificationSettingsRelations = relations(notificationSettings, ({one}) => ({
+	organization: one(organizations, {
+		fields: [notificationSettings.organizationId],
+		references: [organizations.id]
+	}),
+	user: one(users, {
+		fields: [notificationSettings.userId],
+		references: [users.id]
+	}),
+}));
+
+export const invoicesRelations = relations(invoices, ({one}) => ({
+	organization: one(organizations, {
+		fields: [invoices.organizationId],
+		references: [organizations.id]
+	}),
+}));
+
+export const organizationMembersRelations = relations(organizationMembers, ({one}) => ({
+	organization: one(organizations, {
+		fields: [organizationMembers.organizationId],
+		references: [organizations.id]
+	}),
+	user_userId: one(users, {
+		fields: [organizationMembers.userId],
+		references: [users.id],
+		relationName: "organizationMembers_userId_users_id"
+	}),
+	user_invitedBy: one(users, {
+		fields: [organizationMembers.invitedBy],
+		references: [users.id],
+		relationName: "organizationMembers_invitedBy_users_id"
+	}),
+}));
+
+export const organizationInvitationsRelations = relations(organizationInvitations, ({one}) => ({
+	organization: one(organizations, {
+		fields: [organizationInvitations.organizationId],
+		references: [organizations.id]
+	}),
+	user: one(users, {
+		fields: [organizationInvitations.invitedBy],
+		references: [users.id]
+	}),
+}));
+
+export const onboardingProgressRelations = relations(onboardingProgress, ({one}) => ({
+	organization: one(organizations, {
+		fields: [onboardingProgress.organizationId],
+		references: [organizations.id]
+	}),
+	user: one(users, {
+		fields: [onboardingProgress.userId],
+		references: [users.id]
+	}),
+}));
+
+export const dashboardSnapshotsRelations = relations(dashboardSnapshots, ({one}) => ({
+	organization: one(organizations, {
+		fields: [dashboardSnapshots.organizationId],
+		references: [organizations.id]
+	}),
+	repository: one(repositories, {
+		fields: [dashboardSnapshots.repositoryId],
+		references: [repositories.id]
 	}),
 }));
 

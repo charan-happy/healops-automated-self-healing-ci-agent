@@ -16,6 +16,13 @@ import {
   Cpu,
   GitBranch,
   Zap,
+  Activity,
+  BarChart3,
+  Database,
+  ListTodo,
+  Search,
+  FileCode,
+  ExternalLink,
 } from "lucide-react";
 import {
   Sidebar,
@@ -172,6 +179,83 @@ export function AppSidebar() {
                   >
                     <BookOpen />
                     <span>Docs</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Observability</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="http://localhost:9090" target="_blank" rel="noopener noreferrer">
+                    <Activity className="text-orange-400" />
+                    <span>Prometheus</span>
+                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="http://localhost:3001" target="_blank" rel="noopener noreferrer">
+                    <BarChart3 className="text-emerald-400" />
+                    <span>Grafana</span>
+                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="http://localhost:16686" target="_blank" rel="noopener noreferrer">
+                    <Search className="text-sky-400" />
+                    <span>Jaeger Tracing</span>
+                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="http://localhost:4000/admin/queues" target="_blank" rel="noopener noreferrer">
+                    <ListTodo className="text-violet-400" />
+                    <span>BullMQ Board</span>
+                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="http://localhost:4000/metrics" target="_blank" rel="noopener noreferrer">
+                    <Database className="text-amber-400" />
+                    <span>Metrics</span>
+                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="http://localhost:4000/api" target="_blank" rel="noopener noreferrer">
+                    <FileCode className="text-cyan-400" />
+                    <span>Swagger API</span>
+                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="http://localhost:4000/dev-tools" target="_blank" rel="noopener noreferrer">
+                    <Wrench className="text-rose-400" />
+                    <span>Dev Tools</span>
+                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
                   </a>
                 </SidebarMenuButton>
               </SidebarMenuItem>
