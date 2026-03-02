@@ -22,7 +22,7 @@ export default function DashboardLayout({
             <AppBreadcrumb />
           </Suspense>
         </header>
-        <main className="flex-1 overflow-auto">{children}</main>
+        <div className="flex-1 overflow-auto">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

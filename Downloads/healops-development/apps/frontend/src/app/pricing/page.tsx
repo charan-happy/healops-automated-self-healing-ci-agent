@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Check, Zap, ArrowRight } from "lucide-react";
+import { Check, Zap, ArrowRight, Sparkles, Building2 } from "lucide-react";
 import { fetchBillingPlans } from "@/app/_libs/healops-api";
 import type { BillingPlan } from "@/app/_libs/types/settings";
+import { PoweredByGeekyAnts } from "@/app/_components/PoweredByGeekyAnts";
 
 const FALLBACK_PLANS: BillingPlan[] = [
   {
@@ -62,6 +63,12 @@ const FALLBACK_PLANS: BillingPlan[] = [
   },
 ];
 
+const PLAN_ICONS = {
+  free: Zap,
+  pro: Sparkles,
+  enterprise: Building2,
+} as const;
+
 export default function PricingPage() {
   const [plans, setPlans] = useState<BillingPlan[]>(FALLBACK_PLANS);
 
@@ -76,26 +83,36 @@ export default function PricingPage() {
   }, []);
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center p-6">
+    <div className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden p-6">
+      {/* Animated background */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-40 top-1/4 size-[600px] animate-pulse rounded-full bg-brand-cyan/[0.05] blur-[150px]" />
+        <div className="absolute -right-40 bottom-1/4 size-[500px] animate-pulse rounded-full bg-brand-primary/[0.05] blur-[120px] [animation-delay:1.5s]" />
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-5xl space-y-12"
+        className="relative w-full max-w-6xl space-y-14"
       >
         {/* Header */}
         <div className="text-center">
-          <Link href="/login" className="mb-6 inline-flex items-center gap-2">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan to-brand-primary shadow-lg shadow-brand-cyan/20">
-              <Zap className="size-5 text-white" />
+          <Link href="/login" className="mb-8 inline-flex items-center gap-3">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-cyan to-brand-primary shadow-xl shadow-brand-cyan/25">
+              <Zap className="size-5.5 text-white" />
             </div>
-            <span className="text-xl font-black tracking-tight text-gradient">
+            <span className="text-2xl font-black tracking-tight text-gradient">
               HealOps
             </span>
           </Link>
-          <h1 className="text-4xl font-bold tracking-tight">
-            Simple, transparent pricing
+          <h1 className="text-5xl font-bold tracking-tight">
+            Simple,{" "}
+            <span className="bg-gradient-to-r from-brand-cyan to-emerald-400 bg-clip-text text-transparent">
+              transparent
+            </span>{" "}
+            pricing
           </h1>
-          <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
+          <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">
             Start free and scale as your team grows. Every plan includes our
             autonomous CI/CD repair agent with multi-language support.
           </p>
@@ -105,78 +122,109 @@ export default function PricingPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {plans.map((plan, i) => {
             const isPopular = plan.slug === "pro";
+            const PlanIcon = PLAN_ICONS[plan.slug as keyof typeof PLAN_ICONS] ?? Zap;
             return (
               <motion.div
                 key={plan.id}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className={`relative rounded-2xl border p-8 transition-all ${
+                transition={{ delay: 0.15 + i * 0.12 }}
+                className={`group relative flex flex-col rounded-2xl border p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${
                   isPopular
-                    ? "border-brand-cyan bg-brand-cyan/5 shadow-lg shadow-brand-cyan/10"
-                    : "border-white/10 bg-white/5"
+                    ? "border-brand-cyan/50 bg-gradient-to-b from-brand-cyan/[0.08] to-transparent shadow-xl shadow-brand-cyan/10"
+                    : "border-white/[0.08] bg-card/40 backdrop-blur-sm hover:border-white/[0.15]"
                 }`}
               >
                 {isPopular && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand-cyan px-3 py-1 text-xs font-bold text-black">
+                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-brand-cyan to-emerald-400 px-4 py-1 text-xs font-bold text-black shadow-lg shadow-brand-cyan/30">
                     Most Popular
                   </span>
                 )}
 
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold">{plan.name}</h3>
-                  <div className="mt-3 flex items-baseline gap-1">
-                    <span className="text-4xl font-bold">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div className={`flex size-10 items-center justify-center rounded-xl ${
+                      isPopular
+                        ? "bg-brand-cyan/15 text-brand-cyan"
+                        : "bg-white/[0.06] text-muted-foreground"
+                    }`}>
+                      <PlanIcon className="size-5" />
+                    </div>
+                    <h3 className="text-lg font-bold">{plan.name}</h3>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-5xl font-extrabold tracking-tight">
                       {plan.priceCents === 0
                         ? "$0"
                         : `$${(plan.priceCents / 100).toFixed(0)}`}
                     </span>
-                    <span className="text-sm text-muted-foreground">/month</span>
+                    <span className="text-sm text-muted-foreground">/mo</span>
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {plan.monthlyJobLimit === -1
                       ? "Unlimited repair jobs"
-                      : `${plan.monthlyJobLimit} repair jobs/month`}
+                      : `Up to ${plan.monthlyJobLimit} repairs/month`}
                   </p>
                 </div>
 
-                <ul className="mb-8 space-y-3">
+                <ul className="mb-8 flex-1 space-y-3">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-sm">
-                      <Check className="mt-0.5 size-4 shrink-0 text-brand-cyan" />
-                      <span>{feature}</span>
+                    <li key={feature} className="flex items-start gap-2.5 text-sm">
+                      <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-brand-cyan/15">
+                        <Check className="size-3 text-brand-cyan" />
+                      </div>
+                      <span className="text-muted-foreground">{feature}</span>
                     </li>
                   ))}
                 </ul>
 
                 <Link
                   href="/register"
-                  className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+                  className={`relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl px-4 py-3 text-sm font-bold transition-all ${
                     isPopular
-                      ? "bg-brand-cyan text-black hover:bg-brand-cyan/90"
-                      : "border border-white/10 bg-white/5 hover:bg-white/10"
+                      ? "bg-gradient-to-r from-brand-cyan to-brand-cyan/80 text-black shadow-lg shadow-brand-cyan/25 hover:shadow-xl hover:shadow-brand-cyan/35"
+                      : "border border-white/10 bg-white/[0.04] hover:bg-white/[0.08]"
                   }`}
                 >
+                  {isPopular && (
+                    <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-btn-shine" />
+                  )}
                   {plan.priceCents === 0 ? "Get Started Free" : "Start Free Trial"}
-                  <ArrowRight className="size-4" />
+                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
               </motion.div>
             );
           })}
         </div>
 
-        {/* Footer */}
-        <div className="text-center">
+        {/* Trust bar */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+          className="flex flex-col items-center gap-6"
+        >
+          <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground/60">
+            <span className="flex items-center gap-1.5">
+              <Check className="size-3.5 text-emerald-400" /> 14-day free trial
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="size-3.5 text-emerald-400" /> No credit card required
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="size-3.5 text-emerald-400" /> Cancel anytime
+            </span>
+          </div>
+
           <p className="text-sm text-muted-foreground">
-            All plans include a 14-day free trial. No credit card required.
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/login" className="font-medium text-brand-cyan hover:underline">
+            <Link href="/login" className="font-semibold text-brand-cyan hover:underline">
               Sign in
             </Link>
           </p>
-        </div>
+
+          <PoweredByGeekyAnts className="mt-2" />
+        </motion.div>
       </motion.div>
     </div>
   );

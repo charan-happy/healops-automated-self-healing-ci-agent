@@ -31,6 +31,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  SidebarRail,
 } from "@/components/ui/sidebar";
 import {
   Collapsible,
@@ -41,6 +42,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useOrg } from "@/app/_libs/context/OrgContext";
 import { useAuth } from "@/app/_libs/context/AuthContext";
+import { GeekyAntsBadge } from "@/app/_components/PoweredByGeekyAnts";
 
 const settingsSubItems = [
   { title: "Organization", href: "/settings/organization" as const, icon: Building2 },
@@ -125,7 +127,7 @@ export function AppSidebar() {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname.startsWith("/repair-jobs")}>
-                  <Link href="/dashboard">
+                  <Link href="/repair-jobs">
                     <Wrench />
                     <span>Repair Jobs</span>
                   </Link>
@@ -180,6 +182,9 @@ export function AppSidebar() {
 
       <Separator className="bg-white/[0.06]" />
       <SidebarFooter>
+        <div className="flex justify-center py-1 group-data-[collapsible=icon]:hidden">
+          <GeekyAntsBadge />
+        </div>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg">
@@ -221,6 +226,7 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

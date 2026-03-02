@@ -54,7 +54,7 @@ export function RecentActivityFeed({
   loading,
 }: RecentActivityFeedProps) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+    <div className="rounded-2xl border border-white/[0.08] bg-card/50 p-6 backdrop-blur-xl transition-all hover:border-white/[0.12]">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Recent Activity</h3>

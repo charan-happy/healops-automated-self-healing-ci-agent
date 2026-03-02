@@ -7,11 +7,13 @@ import {
   HttpStatus,
   UseGuards,
   Req,
+  Res,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { RouteNames } from '@common/route-names';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -28,10 +30,15 @@ import { TokenResponse } from './interfaces/token-response.interface';
 @Controller({ path: RouteNames.AUTH, version: '1' })
 @ApiTags('Auth')
 export class AuthController {
+  private readonly frontendUrl: string;
+
   constructor(
     private readonly authService: AuthService,
     private readonly mfaService: MfaService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3099';
+  }
 
   // ─── Registration & Login ──────────────────────────────────────────────────
 
@@ -111,8 +118,8 @@ export class AuthController {
   @Public()
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Google OAuth callback' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Google OAuth login successful' })
-  async googleAuthCallback(@Req() req: Request): Promise<TokenResponse> {
+  @ApiResponse({ status: HttpStatus.FOUND, description: 'Redirects to frontend with tokens' })
+  async googleAuthCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
     const oauthUser = req.user as {
       provider: string;
       providerId: string;
@@ -122,7 +129,13 @@ export class AuthController {
       accessToken?: string;
       refreshToken?: string;
     };
-    return this.authService.handleOAuthLogin(oauthUser);
+    const tokens = await this.authService.handleOAuthLogin(oauthUser);
+    const params = new URLSearchParams({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: String(tokens.expiresIn),
+    });
+    res.redirect(`${this.frontendUrl}/auth/callback?${params.toString()}`);
   }
 
   // ─── GitHub OAuth ─────────────────────────────────────────────────────────
@@ -140,8 +153,8 @@ export class AuthController {
   @Public()
   @UseGuards(AuthGuard('github'))
   @ApiOperation({ summary: 'GitHub OAuth callback' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'GitHub OAuth login successful' })
-  async githubAuthCallback(@Req() req: Request): Promise<TokenResponse> {
+  @ApiResponse({ status: HttpStatus.FOUND, description: 'Redirects to frontend with tokens' })
+  async githubAuthCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
     const oauthUser = req.user as {
       provider: string;
       providerId: string;
@@ -151,7 +164,13 @@ export class AuthController {
       accessToken?: string;
       refreshToken?: string;
     };
-    return this.authService.handleOAuthLogin(oauthUser);
+    const tokens = await this.authService.handleOAuthLogin(oauthUser);
+    const params = new URLSearchParams({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: String(tokens.expiresIn),
+    });
+    res.redirect(`${this.frontendUrl}/auth/callback?${params.toString()}`);
   }
 
   // ─── MFA ──────────────────────────────────────────────────────────────────
