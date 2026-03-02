@@ -138,30 +138,36 @@ export default function DashboardPage() {
   }
 
   return (
-    <PageTransition className="space-y-6 p-6 md:p-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Overview of your autonomous repair pipeline
-        </p>
+    <PageTransition className="space-y-8 p-6 md:p-10">
+      {/* Header */}
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Overview of your autonomous repair pipeline
+          </p>
+        </div>
+        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">
+          <span className="size-2 animate-pulse rounded-full bg-emerald-400" />
+          Agent Active
+        </div>
       </div>
 
+      {/* Metrics */}
       <MetricsGrid metrics={metrics} loading={loading} />
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3">
-          <TrendChart
-            data={trendData}
-            loading={loading}
-            onPeriodChange={handlePeriodChange}
-          />
-        </div>
-        <div className="lg:col-span-2">
-          <RepoHealthGrid repos={repoHealth} loading={loading} />
-        </div>
-      </div>
+      {/* Trend Chart — full width */}
+      <TrendChart
+        data={trendData}
+        loading={loading}
+        onPeriodChange={handlePeriodChange}
+      />
 
-      <RecentActivityFeed jobs={recentJobs} loading={loading} />
+      {/* Repo Health + Recent Activity — side by side on large screens */}
+      <div className="grid gap-8 xl:grid-cols-2">
+        <RepoHealthGrid repos={repoHealth} loading={loading} />
+        <RecentActivityFeed jobs={recentJobs} loading={loading} />
+      </div>
     </PageTransition>
   );
 }
