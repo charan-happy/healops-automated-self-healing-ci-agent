@@ -55,13 +55,7 @@ const nextConfig: NextConfig = {
   },
 
   async rewrites() {
-    return [
-      {
-        source: "/",
-        destination: "/dashboard",
-      },
-    
-    ];
+    return [];
   },
 
   experimental: {
