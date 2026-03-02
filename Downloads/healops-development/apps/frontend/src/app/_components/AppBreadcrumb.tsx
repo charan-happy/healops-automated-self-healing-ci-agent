@@ -24,6 +24,7 @@ const pageNames: Record<string, string> = {
   "/settings/billing": "Billing",
   "/settings/notifications": "Notifications",
   "/settings/api-keys": "API Keys",
+  "/repair-jobs": "Repair Jobs",
 };
 
 const AppBreadcrumb = () => {
