@@ -810,6 +810,7 @@ export class GithubWebhookService {
     const orgLogin = payload.organization?.login ?? repoInfo.owner;
     const org = await this.platformRepository.createOrganization({
       name: orgLogin,
+      slug: orgLogin.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
     });
 
     const newRepo = await this.platformRepository.createRepository({

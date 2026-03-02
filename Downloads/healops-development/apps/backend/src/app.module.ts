@@ -71,6 +71,11 @@ import { SlackModule } from './slack/slack.module';
 import { VectorMemoryModule } from './vector-memory/vector-memory.module';
 import { CostTrackingModule } from './cost-tracking/cost-tracking.module';
 import { PipelineStatusModule } from './pipeline-status/pipeline-status.module';
+import { BillingModule } from './billing/billing.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { CiProviderModule } from './ci-provider/ci-provider.module';
+import { CiWebhookModule } from './ci-webhook/ci-webhook.module';
 
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -195,6 +200,11 @@ const cacheModule = CacheModule.registerAsync({
     VectorMemoryModule,
     CostTrackingModule,
     PipelineStatusModule,
+    BillingModule,
+    DashboardModule,
+    OnboardingModule,
+    CiProviderModule,
+    CiWebhookModule,
 
     // APIs
     MetricsModule,

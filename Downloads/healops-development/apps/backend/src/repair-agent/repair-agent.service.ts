@@ -184,7 +184,7 @@ export class RepairAgentService {
 
       let claudeOutput: ClaudeFixOutput;
       try {
-        const llmResponse = await this.aiService.chatCompletion({
+        const llmResponse = await this.aiService.chatCompletionWithFallback({
           messages: [
             { role: 'system', content: prompt.system },
             { role: 'user', content: prompt.user },
@@ -521,7 +521,7 @@ export class RepairAgentService {
 
       let claudeOutput: ClaudeFixOutput;
       try {
-        const llmResponse = await this.aiService.chatCompletion({
+        const llmResponse = await this.aiService.chatCompletionWithFallback({
           messages: [
             { role: 'system', content: prompt.system },
             { role: 'user', content: prompt.user },

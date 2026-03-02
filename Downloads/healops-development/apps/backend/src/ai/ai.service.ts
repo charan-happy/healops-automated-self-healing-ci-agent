@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ClaudeAiProvider } from './providers/claude.provider';
 import { OpenAiProvider } from './providers/openai.provider';
 import { OpenRouterProvider } from './providers/openrouter.provider';
+import { LocalLlmProvider } from './providers/local-llm.provider';
 import { AiProvider } from './providers/ai.provider';
 import {
   ChatCompletionOptions,
@@ -11,9 +12,10 @@ import {
   EmbeddingResult,
   StructuredOutputOptions,
 } from './interfaces/ai-provider.interface';
-import { AiResponse } from './interfaces/ai-response.interface';
+import { AiResponse, FallbackAttempt } from './interfaces/ai-response.interface';
+import { CircuitBreakerService } from './circuit-breaker.service';
 
-type AiProviderName = 'claude' | 'openai' | 'openrouter';
+type AiProviderName = 'claude' | 'openai' | 'openrouter' | 'local';
 
 /**
  * Facade service for AI operations.
@@ -36,9 +38,11 @@ export class AiService {
     private readonly claudeProvider: ClaudeAiProvider,
     private readonly openaiProvider: OpenAiProvider,
     private readonly openrouterProvider: OpenRouterProvider,
+    private readonly localLlmProvider: LocalLlmProvider,
+    private readonly circuitBreaker: CircuitBreakerService,
   ) {
     const configured = this.configService.get<string>('AI_DEFAULT_PROVIDER') ?? 'claude';
-    const validProviders: AiProviderName[] = ['claude', 'openai', 'openrouter'];
+    const validProviders: AiProviderName[] = ['claude', 'openai', 'openrouter', 'local'];
     this.defaultProvider = validProviders.includes(configured as AiProviderName)
       ? (configured as AiProviderName)
       : 'claude';
@@ -47,6 +51,7 @@ export class AiService {
       ['claude', this.claudeProvider],
       ['openai', this.openaiProvider],
       ['openrouter', this.openrouterProvider],
+      ['local', this.localLlmProvider],
     ]);
 
     this.logger.log(`AI service initialised — default provider: ${this.defaultProvider}`);
@@ -110,9 +115,12 @@ export class AiService {
     providerName?: string,
   ): Promise<AiResponse<EmbeddingResult>> {
     // Use the default provider for embeddings (OpenRouter and OpenAI both support them).
-    // Only fall back to 'openai' if the default is 'claude' (which has no embeddings API).
-    const resolvedName =
-      providerName ?? (this.defaultProvider === 'claude' ? 'openai' : this.defaultProvider);
+    // Fall back to 'openai' if the default is 'claude' (no embeddings API) or
+    // 'local' without an embedding model configured.
+    let resolvedName = providerName ?? this.defaultProvider;
+    if (!providerName && (this.defaultProvider === 'claude' || this.defaultProvider === 'local')) {
+      resolvedName = 'openai';
+    }
     const provider = this.getProvider(resolvedName);
     const startMs = Date.now();
 
@@ -184,7 +192,154 @@ export class AiService {
     return this.chatCompletion(completionOptions, providerName);
   }
 
+  // ─── Fallback Chat Completion ─────────────────────────────────────────────
+
+  /**
+   * Run a chat completion with automatic fallback through available providers.
+   *
+   * Iterates through a prioritised chain of providers, skipping any whose
+   * circuit breaker is open. Records success/failure with the circuit breaker
+   * so that persistently failing providers are temporarily removed from the pool.
+   *
+   * @param options       - Messages, model, temperature, tools, etc.
+   * @param preferred     - Preferred provider name (placed first in chain).
+   * @returns AiResponse with fallbackAttempts metadata.
+   */
+  async chatCompletionWithFallback(
+    options: ChatCompletionOptions,
+    preferred?: string,
+  ): Promise<AiResponse<ChatCompletionResult>> {
+    const chain = this.buildFallbackChain(preferred);
+    const attempts: FallbackAttempt[] = [];
+    let lastError: unknown;
+
+    for (const providerName of chain) {
+      if (!this.circuitBreaker.isAvailable(providerName)) {
+        this.logger.debug(`Skipping provider "${providerName}" — circuit OPEN`);
+        continue;
+      }
+
+      const provider = this.providerMap.get(providerName);
+      if (!provider) {
+        continue;
+      }
+
+      const startMs = Date.now();
+      try {
+        const result = await provider.chatCompletion(options);
+        const latencyMs = Date.now() - startMs;
+
+        this.circuitBreaker.recordSuccess(providerName);
+
+        attempts.push({ providerName, success: true, latencyMs });
+
+        this.logger.debug(
+          `chatCompletionWithFallback [${providerName}] succeeded in ` +
+            String(latencyMs) + 'ms — tokens: ' + String(result.usage.totalTokens),
+        );
+
+        const response: AiResponse<ChatCompletionResult> = {
+          data: result,
+          provider: providerName,
+          model: result.model,
+          usage: result.usage,
+          latencyMs,
+        };
+
+        if (attempts.length > 0) {
+          response.fallbackAttempts = attempts;
+        }
+
+        return response;
+      } catch (error: unknown) {
+        const latencyMs = Date.now() - startMs;
+        const errMsg = error instanceof Error ? error.message : 'Unknown error';
+
+        this.circuitBreaker.recordFailure(providerName);
+        attempts.push({ providerName, success: false, error: errMsg, latencyMs });
+
+        this.logger.warn(
+          `chatCompletionWithFallback [${providerName}] failed after ` +
+            String(latencyMs) + 'ms: ' + errMsg,
+        );
+
+        lastError = error;
+      }
+    }
+
+    // All providers exhausted
+    this.logger.error(
+      'chatCompletionWithFallback — all providers failed (' +
+        String(attempts.length) + ' attempts)',
+    );
+    throw lastError ?? new Error('No AI providers available');
+  }
+
+  // ─── Fallback Structured Output ─────────────────────────────────────────
+
+  /**
+   * Request a structured (JSON schema) completion with provider fallback.
+   *
+   * Wraps `structuredOutput` logic with the same fallback chain used by
+   * `chatCompletionWithFallback`.
+   *
+   * @param options       - Messages, JSON schema, and schema name.
+   * @param preferred     - Preferred provider name.
+   * @returns AiResponse with fallbackAttempts metadata.
+   */
+  async structuredOutputWithFallback<T = unknown>(
+    options: StructuredOutputOptions<T>,
+    preferred?: string,
+  ): Promise<AiResponse<ChatCompletionResult>> {
+    const schemaInstruction =
+      `You MUST respond with ONLY valid JSON that conforms to the following JSON schema ` +
+      `named "${options.schemaName}":\n\n${JSON.stringify(options.schema, null, 2)}\n\n` +
+      `Do not include any text outside the JSON object. Do not use markdown code fences.`;
+
+    const messagesWithSchema = [
+      { role: 'system' as const, content: schemaInstruction },
+      ...options.messages,
+    ];
+
+    const completionOptions: ChatCompletionOptions = {
+      messages: messagesWithSchema,
+    };
+
+    if (options.model !== undefined) {
+      completionOptions.model = options.model;
+    }
+
+    return this.chatCompletionWithFallback(completionOptions, preferred);
+  }
+
   // ─── Private helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Build a de-duplicated fallback chain starting with the preferred provider
+   * (or the configured default), followed by all remaining known providers.
+   */
+  private buildFallbackChain(preferred?: string): string[] {
+    const allProviders: AiProviderName[] = ['claude', 'openai', 'openrouter', 'local'];
+    const first = preferred ?? this.defaultProvider;
+    const seen = new Set<string>();
+    const chain: string[] = [];
+
+    // Preferred / default first
+    if (allProviders.includes(first as AiProviderName)) {
+      chain.push(first);
+      seen.add(first);
+    }
+
+    // Then remaining providers in canonical order
+    for (const p of allProviders) {
+      if (!seen.has(p)) {
+        chain.push(p);
+        seen.add(p);
+      }
+    }
+
+    return chain;
+  }
 
   /**
    * Resolve the requested provider by name, falling back to the default.
