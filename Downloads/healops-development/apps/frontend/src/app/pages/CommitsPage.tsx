@@ -7,6 +7,7 @@ import { GitCommit, Loader2, Search } from "lucide-react";
 import PageTransition from "../_components/PageTransition";
 import { fetchCommits } from "../_libs/github/github-service";
 import { fetchPipelineStatus } from "../_libs/healops-api";
+import { mockCommits } from "../_libs/mockData";
 import type { Commit, PipelineStatus } from "../_libs/mockData";
 
 // ─── Module-level cache (survives component re-mounts) ──────────────────────
@@ -75,14 +76,14 @@ const CommitsPage = () => {
   const projectId = searchParams.get("projectId");
   const branchId = searchParams.get("branchId");
 
-  const [owner, repo] = projectId ? projectId.split("--") : [null, null];
+  const [owner, repo] = projectId?.includes("--") ? projectId.split("--") : [null, null];
 
   const cacheKey = `${projectId}:${branchId}`;
   const cached = commitsCache.get(cacheKey);
 
   const [commits, setCommits] = useState<Commit[]>(cached ?? []);
   const [loading, setLoading] = useState(!cached);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const cacheKeyRef = useRef(cacheKey);
 
@@ -90,6 +91,10 @@ const CommitsPage = () => {
     cacheKeyRef.current = cacheKey;
 
     if (!owner || !repo || !branchId) {
+      // Demo mode — show mock commits for the branch
+      if (branchId && mockCommits[branchId]) {
+        setCommits(mockCommits[branchId]);
+      }
       setLoading(false);
       return;
     }
@@ -112,9 +117,12 @@ const CommitsPage = () => {
           setLoading(false);
         }
       })
-      .catch((err) => {
+      .catch(() => {
         if (!cancelled) {
-          setError(err.message);
+          // Fallback to demo commits
+          if (branchId && mockCommits[branchId]) {
+            setCommits(mockCommits[branchId]);
+          }
           setLoading(false);
         }
       });
