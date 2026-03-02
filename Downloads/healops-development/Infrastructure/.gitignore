@@ -1,0 +1,27 @@
+# Terraform state (stored in S3)
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+
+# Your actual values — NEVER commit
+terraform.tfvars
+
+# Generated SSH key
+../../healops-ec2.pem
+*.pem
+
+# Terraform plan files
+*.tfplan
+tfplan
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Crash logs
+crash.log
+crash.*.log

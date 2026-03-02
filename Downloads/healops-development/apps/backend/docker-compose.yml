@@ -1,0 +1,77 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# HealOps — Backend Local Dev Docker Compose
+# Starts: postgres (pg17+pgvector), redis, grafana
+# Use this for backend-only local development
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  postgres-db:
+    image: 'pgvector/pgvector:pg17'   # ✅ pg17 — matches RDS + ARCHITECTURE.md
+    container_name: healops-postgres-dev
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-healops}
+      POSTGRES_USER: ${POSTGRES_USER:-healops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-healops_secret}
+      TZ: UTC
+    ports:
+      - '${POSTGRES_PORT:-5433}:5432'
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-healops} -d ${POSTGRES_DB:-healops}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - monitoring
+
+  redis:
+    image: 'redis:7-alpine'
+    container_name: healops-redis-dev
+    ports:
+      - '${REDIS_PORT:-6379}:6379'    # ✅ fixed — container always listens on 6379
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis_secret}", "--appendonly", "yes"]
+    user: 'redis'
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_secret}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - monitoring
+
+  grafana:                              # ✅ NOW correctly inside `services:`
+    image: grafana/grafana:11.1.0
+    container_name: healops-grafana-dev
+    restart: unless-stopped
+    ports:
+      - '3001:3000'
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./apm/grafana/provisioning:/etc/grafana/provisioning  # ✅ provisioning mount
+    networks:
+      - monitoring
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Volumes
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  db_data:
+  redis_data:
+  grafana_data:    # ✅ declared — was missing, causing grafana volume to fail
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Networks
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  monitoring:
+    driver: bridge

@@ -1,0 +1,57 @@
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  postgres-db:
+    # In production — use managed DB (RDS/Cloud SQL), not Docker
+    # Remove this service and update DATABASE_URL env var
+    image: 'pgvector/pgvector:pg17'
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256  # Strongest auth method
+
+  redis:
+    image: 'redis:7-alpine'
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --tls-port 6380
+      --tls-cert-file /tls/redis.crt
+      --tls-key-file /tls/redis.key
+
+  api:
+    image: ghcr.io/deepanshugoyal10/healops-api:latest
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  worker:
+    image: ghcr.io/deepanshugoyal10/healops-worker:latest
+    deploy:
+      replicas: 3         # Scale workers independently from API
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G     # Workers need more memory for LangGraph state

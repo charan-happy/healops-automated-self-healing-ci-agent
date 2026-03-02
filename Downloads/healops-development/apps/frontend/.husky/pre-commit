@@ -1,0 +1,31 @@
+# safer defaults
+set -Eeuo pipefail
+
+# helpers for styled output (use printf to avoid echo quirks)
+info()    { printf "\033[1;34mℹ️  %s\033[0m\n" "$1"; }
+success() { printf "\033[1;32m✅ %s\033[0m\n" "$1"; }
+error()   { printf "\033[1;31m❌ %s\033[0m\n" "$1"; }
+
+# run a step and hard-fail on non-zero exit
+step() {
+  desc="$1"; shift
+  info "$desc"
+  if "$@"; then
+    success "$desc — OK"
+  else
+    error "$desc — FAILED"
+    exit 1
+  fi
+}
+
+printf "\n"
+info "🔍 Running pre-commit checks…"
+
+step "Step 1: Type checking"                 pnpm type:check
+step "Step 1b: Checking circular deps"       pnpm type:circular
+step "Step 2: Running ESLint"                pnpm lint
+step "Step 3: Building project"              pnpm build
+
+printf "\n"
+success "🎉 All pre-commit checks passed!"
+printf "\n"

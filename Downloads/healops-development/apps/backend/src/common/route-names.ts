@@ -1,0 +1,37 @@
+export enum RouteNames {
+  // Slug routes
+  METRICS = 'metrics',
+  HEALTH = 'health',
+  AUTH = 'auth',
+  USERS = 'users',
+  MEDIA = 'media',
+  NOTIFICATIONS = 'notifications',
+  AI = 'ai',
+  WEBHOOKS = 'webhooks',
+  API_DOCS = 'api',
+  TRACING = 'tracing',
+
+  // Named routes
+  DEV_TOOLS = 'dev-tools',
+  QUEUES_UI = 'admin/queues',
+  HEALTH_UI = 'health-ui',
+  LOGIN = 'login',
+  LOGOUT = 'logout',
+  REGISTER = 'register',
+  REFRESH = 'refresh',
+  CHANGE_PASSWORD = 'change-password',
+  FORGOT_PASSWORD = 'forgot-password',
+  RESET_PASSWORD = 'reset-password',
+  VERIFY_EMAIL = 'verify-email',
+  MFA_SETUP = 'mfa/setup',
+  MFA_VERIFY = 'mfa/verify',
+  TEST = 'test',
+  CUSTOM = 'custom',
+  STATUS = 'status',
+
+  // HealOps routes
+  HEALOPS_WEBHOOKS = 'healops/webhooks',
+  HEALOPS_JOBS = 'healops/jobs',
+  HEALOPS_FIX_REQUEST = 'healops/fix-request',
+  HEALOPS_PIPELINE_STATUS = 'healops/pipeline-status',
+}
