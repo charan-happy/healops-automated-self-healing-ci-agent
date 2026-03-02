@@ -76,6 +76,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { CiProviderModule } from './ci-provider/ci-provider.module';
 import { CiWebhookModule } from './ci-webhook/ci-webhook.module';
+import { SettingsModule } from './settings/settings.module';
 
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -205,6 +206,7 @@ const cacheModule = CacheModule.registerAsync({
     OnboardingModule,
     CiProviderModule,
     CiWebhookModule,
+    SettingsModule,
 
     // APIs
     MetricsModule,

@@ -6,23 +6,56 @@ import { FolderGit2, GitBranch, GitCommit, ArrowRight, Loader2, Search, ChevronD
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../_components/PageTransition";
 import { fetchRepos, fetchBranches } from "../_libs/github/github-service";
+import { mockProjects, mockBranches } from "../_libs/mockData";
 import type { Project, Branch } from "../_libs/mockData";
+import { trackEvent, POSTHOG_EVENTS } from "../_libs/utils/analytics";
+
+const PROVIDER_BADGE: Record<string, { label: string; color: string }> = {
+  github: { label: "GitHub", color: "text-white" },
+  gitlab: { label: "GitLab", color: "text-orange-400" },
+  bitbucket: { label: "Bitbucket", color: "text-blue-400" },
+  jenkins: { label: "Jenkins", color: "text-red-400" },
+};
+
+const DEMO_PROJECTS: Project[] = [
+  ...mockProjects,
+  { id: "5", name: "healops-agent", repo: "geekyants/healops-agent", branchCount: 6, lastActivity: "5 min ago" },
+  { id: "6", name: "infra-config", repo: "geekyants/infra-config", branchCount: 4, lastActivity: "30 min ago" },
+];
+
+const DEMO_BRANCHES: Record<string, Branch[]> = {
+  ...mockBranches,
+  "5": [
+    { id: "b9", name: "main", author: "nagacharan", commitCount: 42, lastCommit: "5 min ago", pipelineStatus: "success" },
+    { id: "b10", name: "feature/fallback-chain", author: "nagacharan", commitCount: 8, lastCommit: "2 hours ago", pipelineStatus: "fixed" },
+    { id: "b11", name: "fix/circuit-breaker", author: "aditya", commitCount: 3, lastCommit: "1 day ago", pipelineStatus: "failed" },
+  ],
+  "6": [
+    { id: "b12", name: "main", author: "devops-bot", commitCount: 120, lastCommit: "30 min ago", pipelineStatus: "success" },
+    { id: "b13", name: "feature/multi-region", author: "mithun", commitCount: 15, lastCommit: "4 hours ago", pipelineStatus: "running" },
+  ],
+};
 
 const ProjectsPage = () => {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [isDemo, setIsDemo] = useState(false);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [branchesMap, setBranchesMap] = useState<Record<string, Branch[]>>({});
   const [branchLoading, setBranchLoading] = useState<string | null>(null);
 
   useEffect(() => {
+    trackEvent(POSTHOG_EVENTS.PROJECTS_VIEWED);
     fetchRepos()
       .then(setProjects)
-      .catch((err) => setError(err.message))
+      .catch(() => {
+        setProjects(DEMO_PROJECTS);
+        setIsDemo(true);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -36,6 +69,13 @@ const ProjectsPage = () => {
 
       if (branchesMap[projectId]) return;
 
+      // In demo mode, use demo branches directly
+      if (isDemo) {
+        const demoBranches = DEMO_BRANCHES[projectId] ?? [];
+        setBranchesMap((prev) => ({ ...prev, [projectId]: demoBranches }));
+        return;
+      }
+
       const [owner, repo] = projectId.split("--");
       if (!owner || !repo) return;
 
@@ -44,12 +84,14 @@ const ProjectsPage = () => {
         const branches = await fetchBranches(owner, repo);
         setBranchesMap((prev) => ({ ...prev, [projectId]: branches }));
       } catch {
-        // silently fail — branches section just stays empty
+        // Fallback to demo branches
+        const demoBranches = DEMO_BRANCHES[projectId] ?? [];
+        setBranchesMap((prev) => ({ ...prev, [projectId]: demoBranches }));
       } finally {
         setBranchLoading(null);
       }
     },
-    [expandedId, branchesMap],
+    [expandedId, branchesMap, isDemo],
   );
 
   const filtered = useMemo(() => {
@@ -119,7 +161,14 @@ const ProjectsPage = () => {
                       <FolderGit2 size={20} className="text-brand-cyan" />
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-foreground">{project.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-lg font-bold text-foreground">{project.name}</p>
+                        {project.provider && !isDemo && (
+                          <span className={`rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase ${PROVIDER_BADGE[project.provider]?.color ?? "text-muted-foreground"}`}>
+                            {PROVIDER_BADGE[project.provider]?.label ?? project.provider}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground font-medium">{project.repo}</p>
                     </div>
                   </div>

@@ -212,6 +212,8 @@ export class PlatformRepository {
     installationId: string;
     owner: string;
     repo: string;
+    provider: string;
+    ciProviderConfigId: string | null;
     branchName?: string;
     commitSha?: string;
     runUrl?: string;
@@ -221,6 +223,8 @@ export class PlatformRepository {
         repositoryId: repositories.id,
         installationId: repositories.githubInstallationId,
         repoName: repositories.name,
+        provider: repositories.provider,
+        ciProviderConfigId: repositories.ciProviderConfigId,
         branchName: branches.name,
         commitSha: commits.commitSha,
         externalRunId: pipelineRuns.externalRunId,
@@ -242,6 +246,8 @@ export class PlatformRepository {
       installationId: string;
       owner: string;
       repo: string;
+      provider: string;
+      ciProviderConfigId: string | null;
       branchName?: string;
       commitSha?: string;
       runUrl?: string;
@@ -250,6 +256,8 @@ export class PlatformRepository {
       installationId: row.installationId ?? '',
       owner,
       repo,
+      provider: row.provider ?? 'github',
+      ciProviderConfigId: row.ciProviderConfigId ?? null,
     };
 
     if (row.branchName) result.branchName = row.branchName;
