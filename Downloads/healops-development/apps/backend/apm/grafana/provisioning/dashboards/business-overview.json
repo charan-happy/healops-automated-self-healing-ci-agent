@@ -1,0 +1,431 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    { "title": "Repair Agent", "url": "/d/healops-repair-agent", "type": "link", "icon": "bolt" },
+    { "title": "API Performance", "url": "/d/healops-api-performance", "type": "link", "icon": "dashboard" },
+    { "title": "Node.js Runtime", "url": "/d/healops-nodejs-runtime", "type": "link", "icon": "database" },
+    { "title": "Server Infra", "url": "/d/healops-server-infra", "type": "link", "icon": "cloud" },
+    { "title": "Application Logs", "url": "/d/healops-application-logs", "type": "link", "icon": "list-ul" }
+  ],
+  "panels": [
+    {
+      "title": "",
+      "type": "text",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "# HealOps — Executive Overview\nReal-time health of the autonomous CI/CD pipeline repair platform."
+      }
+    },
+    {
+      "title": "Repair Success Rate",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 2 },
+      "targets": [
+        {
+          "expr": "(sum(healops_jobs_total{status=\"completed\"}) / clamp_min(sum(healops_jobs_total), 1)) * 100",
+          "legendFormat": "Success %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "green", "value": 75 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Total Repair Jobs",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 4, "x": 4, "y": 2 },
+      "targets": [
+        {
+          "expr": "sum(healops_jobs_total)",
+          "legendFormat": "Total",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [{ "color": "blue", "value": null }]
+          }
+        }
+      }
+    },
+    {
+      "title": "Escalations",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 2 },
+      "targets": [
+        {
+          "expr": "sum(healops_escalation_total) or vector(0)",
+          "legendFormat": "Escalations",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "API Error Rate",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 4, "x": 12, "y": 2 },
+      "targets": [
+        {
+          "expr": "sum(rate(api_request_errors_total[5m])) / clamp_min(sum(rate(api_requests_total[5m])), 0.001) * 100",
+          "legendFormat": "Error %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Active Users (5m)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 4, "x": 16, "y": 2 },
+      "targets": [
+        {
+          "expr": "active_users_gauge or vector(0)",
+          "legendFormat": "Users",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [{ "color": "purple", "value": null }]
+          }
+        }
+      }
+    },
+    {
+      "title": "API Uptime (2xx Rate)",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 4, "x": 20, "y": 2 },
+      "targets": [
+        {
+          "expr": "100 - (sum(rate(api_request_errors_total[24h])) / clamp_min(sum(rate(api_requests_total[24h])), 0.001) * 100)",
+          "legendFormat": "Uptime %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 95,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 99 },
+              { "color": "green", "value": 99.5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Repair Jobs Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by(status) (increase(healops_jobs_total[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } }
+        }
+      },
+      "overrides": [
+        {
+          "matcher": { "id": "byName", "options": "completed" },
+          "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+        },
+        {
+          "matcher": { "id": "byName", "options": "failed" },
+          "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+        },
+        {
+          "matcher": { "id": "byName", "options": "escalated" },
+          "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }]
+        }
+      ]
+    },
+    {
+      "title": "API Request Rate & Error Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(api_requests_total[5m]))",
+          "legendFormat": "Requests/s",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(api_request_errors_total[5m]))",
+          "legendFormat": "Errors/s",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      },
+      "overrides": [
+        {
+          "matcher": { "id": "byName", "options": "Errors/s" },
+          "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+        }
+      ]
+    },
+    {
+      "title": "Token Consumption (Cumulative)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(healops_tokens_used{direction=\"input\"}) or vector(0)",
+          "legendFormat": "Input Tokens",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(healops_tokens_used{direction=\"output\"}) or vector(0)",
+          "legendFormat": "Output Tokens",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "stacking": { "mode": "normal" } }
+        }
+      }
+    },
+    {
+      "title": "Mean Fix Latency (p50 / p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(healops_fix_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(healops_fix_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "fillOpacity": 15 }
+        }
+      }
+    },
+    {
+      "title": "Server Resources",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "targets": [
+        {
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "CPU %",
+          "refId": "A"
+        },
+        {
+          "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100",
+          "legendFormat": "Memory %",
+          "refId": "B"
+        },
+        {
+          "expr": "(1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}) * 100",
+          "legendFormat": "Disk %",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      }
+    },
+    {
+      "title": "Top Error Types",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "topk(8, sum by(error_type) (healops_jobs_total{status=\"failed\"}))",
+          "legendFormat": "{{error_type}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Escalation Reasons",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum by(reason) (healops_escalation_total)",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "API Latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(api_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(api_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(api_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      }
+    },
+    {
+      "title": "Dead Letter Queue Depth",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "expr": "sum(healops_dlq_jobs_total) or vector(0)",
+          "legendFormat": "DLQ Jobs",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 15 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Concurrent Requests",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 32 },
+      "targets": [
+        {
+          "expr": "concurrent_http_requests or vector(0)",
+          "legendFormat": "Active",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 100 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Heap Memory Used",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 32 },
+      "targets": [
+        {
+          "expr": "nodejs_heap_size_used_bytes",
+          "legendFormat": "Heap Used",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 268435456 },
+              { "color": "red", "value": 536870912 }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["healops", "overview", "business"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "HealOps — Business Overview",
+  "uid": "healops-business-overview",
+  "version": 1
+}
