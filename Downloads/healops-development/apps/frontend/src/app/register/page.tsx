@@ -4,9 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Zap, Loader2, Check } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 import { useAuth } from "@/app/_libs/context/AuthContext";
 import { PoweredByGeekyAnts } from "@/app/_components/PoweredByGeekyAnts";
+import { HealOpsLogo } from "@/app/_components/HealOpsLogo";
 
 const PERKS = [
   "50 free autonomous repairs/month",
@@ -55,9 +56,7 @@ export default function RegisterPage() {
           transition={{ duration: 0.6 }}
         >
           <div className="flex items-center gap-3">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-cyan to-brand-primary shadow-xl shadow-brand-cyan/25">
-              <Zap className="size-6 text-white" />
-            </div>
+            <HealOpsLogo size={48} className="shadow-xl shadow-brand-cyan/25 rounded-2xl" />
             <div>
               <h2 className="text-2xl font-black tracking-tight text-gradient">HealOps</h2>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -122,9 +121,7 @@ export default function RegisterPage() {
         >
           {/* Mobile logo */}
           <div className="text-center lg:hidden">
-            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-cyan to-brand-primary shadow-lg shadow-brand-cyan/20">
-              <Zap className="size-7 text-white" />
-            </div>
+            <HealOpsLogo size={56} className="mx-auto shadow-lg shadow-brand-cyan/20 rounded-2xl" />
             <h1 className="mt-4 text-2xl font-bold tracking-tight">HealOps</h1>
           </div>
 

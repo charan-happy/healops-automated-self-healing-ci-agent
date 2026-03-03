@@ -35,7 +35,7 @@ export function TrendChart({ data, loading, onPeriodChange }: TrendChartProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-card/50 p-6 backdrop-blur-xl transition-all hover:border-white/[0.12]">
+    <div className="min-w-0 rounded-2xl border border-white/[0.08] bg-card/50 p-6 backdrop-blur-xl transition-all hover:border-white/[0.12]">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Repair Trends</h3>

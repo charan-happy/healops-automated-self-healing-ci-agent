@@ -345,7 +345,7 @@
 .bg-ambient-glow::before,
 .bg-ambient-glow::after {
   content: "";
-  position: fixed;
+  position: absolute;
   border-radius: 50%;
   pointer-events: none;
   z-index: 0;

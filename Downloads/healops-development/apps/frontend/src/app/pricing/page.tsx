@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Check, Zap, ArrowRight, Sparkles, Building2 } from "lucide-react";
+import { Check, ArrowRight, Sparkles, Building2, Rocket } from "lucide-react";
+import { HealOpsLogo } from "@/app/_components/HealOpsLogo";
 import { fetchBillingPlans } from "@/app/_libs/healops-api";
 import type { BillingPlan } from "@/app/_libs/types/settings";
 import { PoweredByGeekyAnts } from "@/app/_components/PoweredByGeekyAnts";
@@ -64,7 +65,7 @@ const FALLBACK_PLANS: BillingPlan[] = [
 ];
 
 const PLAN_ICONS = {
-  free: Zap,
+  free: Rocket,
   pro: Sparkles,
   enterprise: Building2,
 } as const;
@@ -98,9 +99,7 @@ export default function PricingPage() {
         {/* Header */}
         <div className="text-center">
           <Link href="/login" className="mb-8 inline-flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-cyan to-brand-primary shadow-xl shadow-brand-cyan/25">
-              <Zap className="size-5.5 text-white" />
-            </div>
+            <HealOpsLogo size={44} className="shadow-xl shadow-brand-cyan/25 rounded-2xl" />
             <span className="text-2xl font-black tracking-tight text-gradient">
               HealOps
             </span>
@@ -122,7 +121,7 @@ export default function PricingPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {plans.map((plan, i) => {
             const isPopular = plan.slug === "pro";
-            const PlanIcon = PLAN_ICONS[plan.slug as keyof typeof PLAN_ICONS] ?? Zap;
+            const PlanIcon = PLAN_ICONS[plan.slug as keyof typeof PLAN_ICONS] ?? Rocket;
             return (
               <motion.div
                 key={plan.id}
