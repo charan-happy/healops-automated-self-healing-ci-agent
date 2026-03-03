@@ -27,6 +27,7 @@ interface ConfigureCiProviderInput {
   githubInstallationId?: string;
   accessToken?: string;
   serverUrl?: string;
+  scmProvider?: string;
 }
 
 interface RepositorySelection {
@@ -151,6 +152,9 @@ export class OnboardingService {
           throw new BadRequestException('Server URL is required for Jenkins');
         }
         config['serverUrl'] = data.serverUrl;
+        if (data.scmProvider) {
+          config['scmProvider'] = data.scmProvider;
+        }
         displayName = 'Jenkins';
         break;
       }
@@ -203,7 +207,10 @@ export class OnboardingService {
       organizationId,
     );
     const activeCiConfig = ciConfigs.find((c) => c.isActive);
-    const provider = activeCiConfig?.providerType ?? 'github';
+    // Use scmProvider from config JSONB if set (for CI-only providers like Jenkins),
+    // otherwise fall back to the CI provider type itself (GitHub/GitLab act as both SCM and CI)
+    const configData = activeCiConfig?.config as Record<string, unknown> | undefined;
+    const provider = (configData?.['scmProvider'] as string | undefined) ?? activeCiConfig?.providerType ?? 'github';
 
     // Create repository entries
     const createdRepos = await Promise.all(

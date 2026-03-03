@@ -62,6 +62,7 @@ export default function CIProvidersPage() {
       serverUrl: configFields.serverUrl,
       displayName: configFields.displayName,
       githubInstallationId: configFields.installationId,
+      scmProvider: selectedType === "jenkins" ? (configFields.scmProvider || "github") : undefined,
     });
     setSaving(false);
     if (result) {
@@ -395,6 +396,28 @@ export default function CIProvidersPage() {
                     placeholder="admin"
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-brand-cyan/50"
                   />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Source Code Platform</label>
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Where does your source code live?
+                  </p>
+                  <div className="flex gap-2">
+                    {(["github", "gitlab", "bitbucket"] as const).map((scm) => (
+                      <button
+                        key={scm}
+                        type="button"
+                        onClick={() => setConfigFields((f) => ({ ...f, scmProvider: scm }))}
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                          (configFields.scmProvider || "github") === scm
+                            ? "border-brand-cyan bg-brand-cyan/10 text-brand-cyan"
+                            : "border-white/10 text-muted-foreground hover:border-white/20"
+                        }`}
+                      >
+                        {scm === "github" ? "GitHub" : scm === "gitlab" ? "GitLab" : "Bitbucket"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex justify-end gap-3">
                   <button

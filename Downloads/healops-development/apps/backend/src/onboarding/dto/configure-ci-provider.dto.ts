@@ -35,4 +35,15 @@ export class ConfigureCiProviderDto {
   @IsOptional()
   @IsString()
   serverUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Source code platform when CI provider differs from SCM (e.g., Jenkins CI with GitHub SCM)',
+    enum: ['github', 'gitlab', 'bitbucket'],
+    example: 'github',
+  })
+  @IsOptional()
+  @IsIn(['github', 'gitlab', 'bitbucket'], {
+    message: 'scmProvider must be one of: github, gitlab, bitbucket',
+  })
+  scmProvider?: string;
 }

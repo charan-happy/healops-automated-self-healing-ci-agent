@@ -39,7 +39,7 @@ export class CiProviderSettingsController {
   @ApiResponse({ status: 201, description: 'Provider config created' })
   async addProvider(
     @CurrentUser() user: AuthUser,
-    @Body() body: { provider: string; githubInstallationId?: string; accessToken?: string; serverUrl?: string; displayName?: string },
+    @Body() body: { provider: string; githubInstallationId?: string; accessToken?: string; serverUrl?: string; displayName?: string; scmProvider?: string },
   ) {
     const orgId = await this.resolveOrganizationId(user.id);
     return this.service.addProvider(orgId, body);
@@ -51,7 +51,7 @@ export class CiProviderSettingsController {
   async updateProvider(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Body() body: { isActive?: boolean; accessToken?: string; serverUrl?: string; displayName?: string },
+    @Body() body: { isActive?: boolean; accessToken?: string; serverUrl?: string; displayName?: string; scmProvider?: string },
   ) {
     const orgId = await this.resolveOrganizationId(user.id);
     return this.service.updateProvider(id, orgId, body);
