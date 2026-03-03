@@ -79,6 +79,8 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
 
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+  const baseHost = new URL(backendUrl).hostname;
+  const proto = new URL(backendUrl).protocol;
 
   const orgName =
     (onboardingStatus?.data?.organization as { name?: string } | undefined)
@@ -199,9 +201,9 @@ export function AppSidebar() {
               <CollapsibleContent>
                 <SidebarMenuSub>
                   {[
-                    { title: "Prometheus", href: `${backendUrl.replace(':4000', ':9090')}`, icon: Activity, color: "text-orange-400" },
-                    { title: "Grafana", href: `${backendUrl.replace(':4000', ':3001')}`, icon: BarChart3, color: "text-emerald-400" },
-                    { title: "Jaeger", href: `${backendUrl.replace(':4000', ':16686')}`, icon: Search, color: "text-sky-400" },
+                    { title: "Prometheus", href: process.env.NEXT_PUBLIC_PROMETHEUS_URL || `${proto}//${baseHost}:9090`, icon: Activity, color: "text-orange-400" },
+                    { title: "Grafana", href: process.env.NEXT_PUBLIC_GRAFANA_URL || `${proto}//${baseHost}:3003`, icon: BarChart3, color: "text-emerald-400" },
+                    { title: "Jaeger", href: process.env.NEXT_PUBLIC_JAEGER_URL || `${proto}//${baseHost}:16686`, icon: Search, color: "text-sky-400" },
                     { title: "BullMQ", href: `${backendUrl}/admin/queues`, icon: ListTodo, color: "text-violet-400" },
                     { title: "Metrics", href: `${backendUrl}/metrics`, icon: Database, color: "text-amber-400" },
                     { title: "Swagger", href: `${backendUrl}/api`, icon: FileCode, color: "text-cyan-400" },
