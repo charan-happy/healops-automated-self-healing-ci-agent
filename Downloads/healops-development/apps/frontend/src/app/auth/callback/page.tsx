@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Zap } from "lucide-react";
 import { setAccessToken } from "@/app/_libs/healops-api";
+import { HealOpsLogo } from "@/app/_components/HealOpsLogo";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -51,9 +51,7 @@ export default function AuthCallbackPage() {
       <div className="flex flex-col items-center gap-4">
         <div className="relative flex size-16 items-center justify-center">
           <div className="absolute inset-0 animate-ping rounded-2xl bg-brand-cyan/20" />
-          <div className="relative flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-cyan to-brand-primary shadow-xl shadow-brand-cyan/25">
-            <Zap className="size-7 text-white" />
-          </div>
+          <HealOpsLogo size={56} className="relative shadow-xl shadow-brand-cyan/25 rounded-2xl" />
         </div>
         <div className="text-center">
           <p className="text-sm font-medium">Completing sign in...</p>

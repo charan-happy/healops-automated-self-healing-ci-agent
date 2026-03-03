@@ -21,17 +21,17 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <SidebarProvider className="h-screen bg-grid-pattern bg-ambient-glow">
+    <SidebarProvider defaultOpen={false} className="h-screen overflow-hidden">
       <AppSidebar />
-      <SidebarInset className="!min-h-0 h-screen flex flex-col overflow-hidden">
-        <header className="z-30 flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-card/80 backdrop-blur-xl px-6">
+      <SidebarInset className="!min-h-0 min-w-0 h-full flex flex-col overflow-hidden">
+        <header className="z-20 flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-card/80 backdrop-blur-xl px-6">
           <SidebarTrigger className="-ml-1 size-7 text-muted-foreground hover:text-foreground" />
           <Separator orientation="vertical" className="mr-2 h-4 bg-white/10" />
           <Suspense fallback={null}>
             <AppBreadcrumb />
           </Suspense>
         </header>
-        <div className="flex-1 overflow-y-auto">
+        <div className="relative flex-1 overflow-y-auto overflow-x-hidden bg-grid-pattern">
           {children}
 
           {/* ─── Contributors Footer ─── */}

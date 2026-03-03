@@ -4,7 +4,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import {
-  Zap,
   ArrowRight,
   GitBranch,
   Bot,
@@ -15,8 +14,10 @@ import {
   ChevronRight,
   Loader2,
   Mail,
+  Bell,
   Heart,
 } from "lucide-react";
+import { HealOpsLogo } from "@/app/_components/HealOpsLogo";
 
 const FEATURES = [
   {
@@ -50,7 +51,7 @@ const FEATURES = [
       "Per-job token budgets prevent runaway LLM costs. Full visibility into AI spend per repository.",
   },
   {
-    icon: Zap,
+    icon: Bell,
     title: "Instant Notifications",
     description:
       "Slack alerts when fixes are ready. Know immediately when your pipeline is healed.",
@@ -100,9 +101,7 @@ export default function LandingPage() {
       {/* ─── Nav ─────────────────────────────────────────────────────── */}
       <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-cyan to-brand-primary shadow-lg shadow-brand-cyan/20">
-            <Zap className="size-5 text-white" />
-          </div>
+          <HealOpsLogo size={40} className="shadow-lg shadow-brand-cyan/20 rounded-2xl" />
           <span className="text-xl font-black tracking-tight text-gradient">HealOps</span>
         </Link>
         <div className="flex items-center gap-4">
@@ -135,7 +134,7 @@ export default function LandingPage() {
           transition={{ duration: 0.6 }}
         >
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-cyan/20 bg-brand-cyan/5 px-4 py-1.5 text-xs font-semibold text-brand-cyan">
-            <Zap className="size-3.5" />
+            <HealOpsLogo size={14} variant="mono" className="text-brand-cyan" />
             Autonomous CI/CD Repair Agent
           </div>
 
@@ -322,9 +321,7 @@ export default function LandingPage() {
           {/* Nav row */}
           <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-brand-primary">
-                <Zap className="size-3.5 text-white" />
-              </div>
+              <HealOpsLogo size={28} className="rounded-lg" />
               <span className="text-sm font-bold text-gradient">HealOps</span>
             </div>
             <div className="flex items-center gap-6 text-xs text-muted-foreground">

@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# HealOps — Oracle Cloud Terraform Variables
+# Copy to terraform.tfvars and fill in actual values
+# NEVER commit terraform.tfvars — it contains secrets
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── OCI Authentication ──────────────────────────────────────────────────────
+# Get these from: OCI Console → Profile (top-right) → User Settings → API Keys
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaxxxxxxxxx"
+user_ocid        = "ocid1.user.oc1..aaaaaaaxxxxxxxxx"
+compartment_ocid = "ocid1.tenancy.oc1..aaaaaaaxxxxxxxxx" # use tenancy OCID for root
+fingerprint      = "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
+private_key_path = "~/.oci/oci_api_key.pem"
+
+# ── Region ──────────────────────────────────────────────────────────────────
+region = "ap-mumbai-1" # Mumbai — closest to India
+
+# ── Instance ────────────────────────────────────────────────────────────────
+instance_shape      = "VM.Standard.A1.Flex" # ARM Free Tier
+instance_ocpus      = 4                      # 4 OCPU free
+instance_memory_gb  = 24                     # 24 GB free
+boot_volume_size_gb = 100                    # 100 GB (200 GB free total)
+
+# ── SSH ─────────────────────────────────────────────────────────────────────
+create_ssh_key   = true
+ssh_allowed_cidr = "0.0.0.0/0" # CHANGE to your IP: "1.2.3.4/32"
+
+# ── Domain ──────────────────────────────────────────────────────────────────
+domain_name = "healops.online"
+
+# ── App Secrets (CHANGE ALL OF THESE) ───────────────────────────────────────
+postgres_password       = "CHANGE_ME_strong_pg_password"
+redis_password          = "CHANGE_ME_strong_redis_password"
+jwt_secret              = "CHANGE_ME_64_char_jwt_secret_at_least_this_long_for_security"
+github_app_id           = "123456"
+github_app_private_key  = "-----BEGIN RSA PRIVATE KEY-----\nCHANGE_ME\n-----END RSA PRIVATE KEY-----"
+github_webhook_secret   = "CHANGE_ME_webhook_secret"
+openrouter_api_key      = "sk-or-v1-CHANGE_ME"
+slack_webhook_url       = ""
+healops_webhook_api_key = "CHANGE_ME_healops_api_key"

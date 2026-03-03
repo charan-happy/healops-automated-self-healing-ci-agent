@@ -138,7 +138,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <PageTransition className="space-y-8 p-6 md:p-10">
+    <PageTransition className="min-w-0 space-y-8 p-6 md:p-10">
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>

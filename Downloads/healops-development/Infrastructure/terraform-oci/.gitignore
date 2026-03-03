@@ -1,0 +1,18 @@
+# Terraform state (contains secrets)
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+
+# Actual variables file (contains secrets)
+terraform.tfvars
+
+# Terraform cache
+.terraform/
+.terraform.lock.hcl
+
+# SSH keys
+*.pem
+
+# Crash logs
+crash.log
+crash.*.log

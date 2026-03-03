@@ -1,0 +1,55 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# HealOps — Infrastructure Services (PostgreSQL + Redis)
+# Run alongside PM2 app processes on EC2
+# Usage: docker compose -f deploy/docker-compose.infra.yml --env-file apps/backend/.env up -d
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: healops-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-healops}
+      POSTGRES_USER: ${POSTGRES_USER:-healops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      TZ: UTC
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-healops} -d ${POSTGRES_DB:-healops}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: healops-redis
+    ports:
+      - '127.0.0.1:6379:6379'
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command:
+      [
+        'redis-server',
+        '--requirepass', '${REDIS_PASSWORD:-changeme}',
+        '--appendonly', 'yes',
+        '--maxmemory', '256mb',
+        '--maxmemory-policy', 'allkeys-lru',
+      ]
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-changeme}', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

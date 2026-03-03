@@ -15,7 +15,6 @@ import {
   Key,
   Cpu,
   GitBranch,
-  Zap,
   Activity,
   BarChart3,
   Database,
@@ -50,6 +49,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useOrg } from "@/app/_libs/context/OrgContext";
 import { useAuth } from "@/app/_libs/context/AuthContext";
 import { GeekyAntsBadge } from "@/app/_components/PoweredByGeekyAnts";
+import { HealOpsLogo } from "@/app/_components/HealOpsLogo";
 
 const settingsSubItems = [
   { title: "Organization", href: "/settings/organization" as const, icon: Building2 },
@@ -91,9 +91,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard" className="!h-auto !py-3">
-                <div className="flex aspect-square size-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan to-brand-primary shadow-lg shadow-brand-cyan/20">
-                  <Zap className="size-5 text-white" />
-                </div>
+                <HealOpsLogo size={36} className="shrink-0 shadow-lg shadow-brand-cyan/20 rounded-xl" />
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-lg font-black tracking-tight text-gradient">
                     HealOps
