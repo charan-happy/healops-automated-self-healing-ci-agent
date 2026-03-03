@@ -41,7 +41,15 @@ async function bootstrap() {
   app.useLogger(logger);
 
   // Apply Helmet Middleware for setting security-related HTTP headers
-  app.use(helmet());
+  // Relax policies for API-only backend serving cross-origin frontend requests:
+  // - CSP's default-src 'self' + upgrade-insecure-requests blocks cross-origin fetch on localhost
+  // - CORP same-origin blocks the browser from reading cross-origin API responses
+  // - COOP same-origin can interfere with OAuth popup flows
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: false,
+    crossOriginOpenerPolicy: false,
+  }));
 
   // Apply response compression
   app.use(compression());
@@ -167,7 +175,8 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = process.env['PORT'] || 3000;
-  await app.listen(port, '0.0.0.0');
+  // Listen on all interfaces (IPv4 + IPv6) so browsers resolving localhost to ::1 can connect
+  await app.listen(port);
   const appUrl = await app.getUrl();
   Logger.log(`App is running on ${appUrl}`, 'Project/App Name');
   await copyStaticAssets();
