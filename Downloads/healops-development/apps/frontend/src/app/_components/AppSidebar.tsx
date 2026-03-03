@@ -78,6 +78,8 @@ export function AppSidebar() {
   const { onboardingStatus, subscription } = useOrg();
   const { user, logout } = useAuth();
 
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+
   const orgName =
     (onboardingStatus?.data?.organization as { name?: string } | undefined)
       ?.name ?? "My Org";
@@ -184,82 +186,42 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Observability</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="http://localhost:9090" target="_blank" rel="noopener noreferrer">
-                    <Activity className="text-orange-400" />
-                    <span>Prometheus</span>
-                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
-                  </a>
+        <Collapsible>
+          <SidebarGroup>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton>
+                  <Activity />
+                  <span>Observability</span>
+                  <ChevronsUpDown className="ml-auto size-4" />
                 </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="http://localhost:3001" target="_blank" rel="noopener noreferrer">
-                    <BarChart3 className="text-emerald-400" />
-                    <span>Grafana</span>
-                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="http://localhost:16686" target="_blank" rel="noopener noreferrer">
-                    <Search className="text-sky-400" />
-                    <span>Jaeger Tracing</span>
-                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="http://localhost:4000/admin/queues" target="_blank" rel="noopener noreferrer">
-                    <ListTodo className="text-violet-400" />
-                    <span>BullMQ Board</span>
-                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="http://localhost:4000/metrics" target="_blank" rel="noopener noreferrer">
-                    <Database className="text-amber-400" />
-                    <span>Metrics</span>
-                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="http://localhost:4000/api" target="_blank" rel="noopener noreferrer">
-                    <FileCode className="text-cyan-400" />
-                    <span>Swagger API</span>
-                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="http://localhost:4000/dev-tools" target="_blank" rel="noopener noreferrer">
-                    <Wrench className="text-rose-400" />
-                    <span>Dev Tools</span>
-                    <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarMenuSub>
+                  {[
+                    { title: "Prometheus", href: `${backendUrl.replace(':4000', ':9090')}`, icon: Activity, color: "text-orange-400" },
+                    { title: "Grafana", href: `${backendUrl.replace(':4000', ':3001')}`, icon: BarChart3, color: "text-emerald-400" },
+                    { title: "Jaeger", href: `${backendUrl.replace(':4000', ':16686')}`, icon: Search, color: "text-sky-400" },
+                    { title: "BullMQ", href: `${backendUrl}/admin/queues`, icon: ListTodo, color: "text-violet-400" },
+                    { title: "Metrics", href: `${backendUrl}/metrics`, icon: Database, color: "text-amber-400" },
+                    { title: "Swagger", href: `${backendUrl}/api`, icon: FileCode, color: "text-cyan-400" },
+                    { title: "Dev Tools", href: `${backendUrl}/dev-tools`, icon: Wrench, color: "text-rose-400" },
+                  ].map((item) => (
+                    <SidebarMenuSubItem key={item.title}>
+                      <SidebarMenuSubButton asChild>
+                        <a href={item.href} target="_blank" rel="noopener noreferrer">
+                          <item.icon className={`size-3.5 ${item.color}`} />
+                          <span>{item.title}</span>
+                          <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
+                        </a>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ))}
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </SidebarMenuItem>
+          </SidebarGroup>
+        </Collapsible>
       </SidebarContent>
 
       <Separator className="bg-white/[0.06]" />
