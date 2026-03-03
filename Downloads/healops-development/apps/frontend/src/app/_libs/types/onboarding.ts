@@ -1,4 +1,5 @@
 export type CiProviderType = "github" | "gitlab" | "bitbucket" | "jenkins";
+export type ScmProviderType = "github" | "gitlab" | "bitbucket";
 
 export interface CiProviderEntry {
   type: CiProviderType;

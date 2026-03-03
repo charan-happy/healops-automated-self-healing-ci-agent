@@ -15,6 +15,7 @@ interface AddProviderInput {
   accessToken?: string;
   serverUrl?: string;
   displayName?: string;
+  scmProvider?: string;
 }
 
 interface UpdateProviderInput {
@@ -22,6 +23,7 @@ interface UpdateProviderInput {
   accessToken?: string;
   serverUrl?: string;
   displayName?: string;
+  scmProvider?: string;
 }
 
 @Injectable()
@@ -90,6 +92,9 @@ export class CiProviderSettingsService {
           throw new BadRequestException('Server URL is required for Jenkins');
         }
         config['serverUrl'] = data.serverUrl;
+        if (data.scmProvider) {
+          config['scmProvider'] = data.scmProvider;
+        }
         displayName = data.displayName ?? 'Jenkins';
         break;
       }
@@ -144,14 +149,17 @@ export class CiProviderSettingsService {
       updateData['displayName'] = data.displayName;
     }
 
-    // Merge config fields if access token or server URL changed
-    if (data.accessToken !== undefined || data.serverUrl !== undefined) {
+    // Merge config fields if access token, server URL, or scmProvider changed
+    if (data.accessToken !== undefined || data.serverUrl !== undefined || data.scmProvider !== undefined) {
       const existingConfig = (existing.config as Record<string, unknown>) ?? {};
       if (data.accessToken !== undefined) {
         existingConfig['accessToken'] = data.accessToken;
       }
       if (data.serverUrl !== undefined) {
         existingConfig['serverUrl'] = data.serverUrl;
+      }
+      if (data.scmProvider !== undefined) {
+        existingConfig['scmProvider'] = data.scmProvider;
       }
       updateData['config'] = existingConfig;
     }

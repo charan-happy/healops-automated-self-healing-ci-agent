@@ -316,6 +316,7 @@ export async function configureCiProvider(data: {
   githubInstallationId?: string;
   accessToken?: string;
   serverUrl?: string;
+  scmProvider?: string;
 }): Promise<unknown> {
   try {
     const res = await fetch(`${BACKEND_URL}/v1/healops/onboarding/ci-provider`, {
@@ -378,6 +379,7 @@ export interface CiProviderCreatePayload {
   accessToken?: string;
   serverUrl?: string;
   displayName?: string;
+  scmProvider?: string;
 }
 
 export interface CiProviderUpdatePayload {
@@ -385,6 +387,7 @@ export interface CiProviderUpdatePayload {
   accessToken?: string;
   serverUrl?: string;
   displayName?: string;
+  scmProvider?: string;
 }
 
 export interface AvailableRepo {
