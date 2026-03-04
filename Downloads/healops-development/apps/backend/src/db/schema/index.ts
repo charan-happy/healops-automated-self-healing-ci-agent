@@ -13,3 +13,5 @@ export * from './intelligence';
 export * from './operations';
 export * from './billing';
 export * from './membership';
+export * from './scm';
+export * from './reviews';

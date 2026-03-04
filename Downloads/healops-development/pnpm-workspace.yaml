@@ -3,13 +3,23 @@ packages:
   - "libs/*"
 
 onlyBuiltDependencies:
+  - "@firebase/util"
+  - "@nestjs/core"
+  - "@openapitools/openapi-generator-cli"
+  - "@parcel/watcher"
   - "@posthog/cli"
+  - "@scarf/scarf"
   - "@sentry/cli"
   - "@tailwindcss/oxide"
   - "@vercel/speed-insights"
+  - bcrypt
   - better-sqlite3
   - core-js
   - esbuild
+  - less
+  - msgpackr-extract
+  - nx
+  - protobufjs
   - sharp
   - unrs-resolver
   - vue-demi

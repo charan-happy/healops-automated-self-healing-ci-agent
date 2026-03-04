@@ -2,25 +2,45 @@ import { Injectable } from '@nestjs/common';
 import { DBService } from '@db/db.service';
 import { notificationSettings } from '../../schema/membership';
 import { eq, and, sql } from 'drizzle-orm';
-import type { IndexColumn } from 'drizzle-orm/pg-core';
 
 @Injectable()
 export class NotificationSettingsRepository {
   constructor(private readonly dbService: DBService) {}
 
   async upsertSetting(data: typeof notificationSettings.$inferInsert) {
-    const [row] = await this.dbService.db
-      .insert(notificationSettings)
-      .values(data)
-      .onConflictDoUpdate({
-        target: sql`(organization_id, COALESCE(user_id, '00000000-0000-0000-0000-000000000000'::uuid), channel)` as unknown as IndexColumn,
-        set: {
+    // The unique index uses COALESCE(user_id, sentinel) which Drizzle can't express
+    // in onConflictDoUpdate target, so use find-then-insert/update pattern.
+    const orgId = data.organizationId;
+    const channel = data.channel;
+
+    const existing = await this.dbService.db
+      .select()
+      .from(notificationSettings)
+      .where(
+        and(
+          eq(notificationSettings.organizationId, orgId),
+          eq(notificationSettings.channel, channel),
+        ),
+      )
+      .limit(1);
+
+    if (existing[0]) {
+      const [row] = await this.dbService.db
+        .update(notificationSettings)
+        .set({
           events: data.events,
           config: data.config,
           isActive: data.isActive,
           updatedAt: new Date(),
-        },
-      })
+        })
+        .where(eq(notificationSettings.id, existing[0].id))
+        .returning();
+      return row ?? null;
+    }
+
+    const [row] = await this.dbService.db
+      .insert(notificationSettings)
+      .values(data)
       .returning();
     return row ?? null;
   }

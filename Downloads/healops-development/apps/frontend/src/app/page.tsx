@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowRight,
   GitBranch,
@@ -16,8 +16,19 @@ import {
   Mail,
   Bell,
   Heart,
+  Star,
+  MessageSquare,
 } from "lucide-react";
 import { HealOpsLogo } from "@/app/_components/HealOpsLogo";
+import {
+  fetchPublicReviews,
+  fetchReviewStats,
+  submitReview,
+} from "@/app/_libs/healops-api";
+import type {
+  PublicReview,
+  ReviewStats,
+} from "@/app/_libs/healops-api";
 
 const FEATURES = [
   {
@@ -89,6 +100,18 @@ const HOW_IT_WORKS = [
 ];
 
 export default function LandingPage() {
+  const [reviews, setReviews] = useState<PublicReview[]>([]);
+  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
+
+  useEffect(() => {
+    fetchPublicReviews(8).then((data) => {
+      if (data) setReviews(data.reviews);
+    });
+    fetchReviewStats().then((data) => {
+      if (data) setReviewStats(data);
+    });
+  }, []);
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-background">
       {/* Animated background blobs */}
@@ -272,6 +295,87 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── Reviews ──────────────────────────────────────────────────── */}
+      <section className="relative z-10 mx-auto max-w-5xl px-6 py-24">
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="text-center"
+        >
+          <h2 className="text-3xl font-bold sm:text-4xl">
+            What{" "}
+            <span className="text-brand-cyan">users</span>{" "}
+            say
+          </h2>
+          {reviewStats && reviewStats.totalCount > 0 && (
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    className={`size-5 ${s <= Math.round(reviewStats.averageRating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`}
+                  />
+                ))}
+              </div>
+              <span className="text-lg font-bold text-brand-cyan">
+                {reviewStats.averageRating}/5
+              </span>
+              <span className="text-sm text-muted-foreground">
+                from {reviewStats.totalCount} reviews
+              </span>
+            </div>
+          )}
+        </motion.div>
+
+        {reviews.length > 0 && (
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {reviews.slice(0, 6).map((review, i) => (
+              <motion.div
+                key={review.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+                viewport={{ once: true }}
+                className="group rounded-xl border border-white/[0.06] bg-card/40 p-6 backdrop-blur-sm transition-all hover:border-brand-cyan/20 hover:shadow-lg hover:shadow-brand-cyan/5"
+              >
+                <div className="mb-3 flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star
+                      key={s}
+                      className={`size-4 ${s <= review.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`}
+                    />
+                  ))}
+                </div>
+                <h4 className="mb-2 text-sm font-bold">{review.title}</h4>
+                <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+                  {review.comment}
+                </p>
+                <div className="border-t border-white/[0.06] pt-3">
+                  <p className="text-xs font-semibold">{review.userName}</p>
+                  {(review.userRole || review.userCompany) && (
+                    <p className="text-xs text-muted-foreground">
+                      {[review.userRole, review.userCompany]
+                        .filter(Boolean)
+                        .join(" at ")}
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-8 text-center">
+          <a
+            href="#write-review"
+            className="inline-flex items-center gap-2 rounded-lg border border-brand-cyan/20 px-6 py-2.5 text-sm font-medium text-brand-cyan transition-all hover:bg-brand-cyan/10"
+          >
+            <MessageSquare className="size-4" /> Write a Review
+          </a>
+        </div>
+      </section>
+
       {/* ─── CTA ─────────────────────────────────────────────────────── */}
       <section className="relative z-10 mx-auto max-w-3xl px-6 py-24 text-center">
         <motion.div
@@ -308,6 +412,11 @@ export default function LandingPage() {
             </span>
           </div>
         </motion.div>
+      </section>
+
+      {/* ─── Write a Review ───────────────────────────────────────────── */}
+      <section className="relative z-10 mx-auto max-w-xl px-6 pb-16" id="write-review">
+        <ReviewSubmissionForm />
       </section>
 
       {/* ─── Beta Signup ────────────────────────────────────────────── */}
@@ -367,6 +476,166 @@ export default function LandingPage() {
   );
 }
 
+/* ─── Review Submission Form ────────────────────────────────────────────────── */
+
+function ReviewSubmissionForm() {
+  const [userName, setUserName] = useState("");
+  const [userRole, setUserRole] = useState("");
+  const [userCompany, setUserCompany] = useState("");
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [title, setTitle] = useState("");
+  const [comment, setComment] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userName || !rating || !title || !comment) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const ok = await submitReview({
+        userName,
+        userRole: userRole || undefined,
+        userCompany: userCompany || undefined,
+        rating,
+        title,
+        comment,
+      });
+      if (!ok) throw new Error("Failed");
+      setSubmitted(true);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center"
+      >
+        <Check className="mx-auto mb-3 size-8 text-emerald-400" />
+        <h3 className="text-lg font-bold">Thank you for your review!</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Your review will appear on the site after approval.
+        </p>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      className="rounded-2xl border border-white/[0.06] bg-card/40 p-8 backdrop-blur-sm"
+    >
+      <div className="mb-6 text-center">
+        <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-xl bg-brand-cyan/10">
+          <MessageSquare className="size-5 text-brand-cyan" />
+        </div>
+        <h3 className="text-lg font-bold">Write a Review</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Share your experience with HealOps.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Star rating */}
+        <div className="flex flex-col items-center gap-1 pb-2">
+          <span className="text-xs text-muted-foreground">Your Rating</span>
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setRating(s)}
+                onMouseEnter={() => setHoverRating(s)}
+                onMouseLeave={() => setHoverRating(0)}
+                className="p-0.5 transition-transform hover:scale-110"
+              >
+                <Star
+                  className={`size-7 ${
+                    s <= (hoverRating || rating)
+                      ? "fill-amber-400 text-amber-400"
+                      : "text-muted-foreground/30"
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <input
+          type="text"
+          required
+          placeholder="Your name *"
+          value={userName}
+          onChange={(e) => setUserName(e.target.value)}
+          className="w-full rounded-lg border border-white/10 bg-background/60 px-4 py-2.5 text-sm placeholder:text-muted-foreground/50 focus:border-brand-cyan/40 focus:outline-none focus:ring-1 focus:ring-brand-cyan/40"
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            type="text"
+            placeholder="Your role (optional)"
+            value={userRole}
+            onChange={(e) => setUserRole(e.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-background/60 px-4 py-2.5 text-sm placeholder:text-muted-foreground/50 focus:border-brand-cyan/40 focus:outline-none focus:ring-1 focus:ring-brand-cyan/40"
+          />
+          <input
+            type="text"
+            placeholder="Company (optional)"
+            value={userCompany}
+            onChange={(e) => setUserCompany(e.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-background/60 px-4 py-2.5 text-sm placeholder:text-muted-foreground/50 focus:border-brand-cyan/40 focus:outline-none focus:ring-1 focus:ring-brand-cyan/40"
+          />
+        </div>
+        <input
+          type="text"
+          required
+          placeholder="Review title *"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full rounded-lg border border-white/10 bg-background/60 px-4 py-2.5 text-sm placeholder:text-muted-foreground/50 focus:border-brand-cyan/40 focus:outline-none focus:ring-1 focus:ring-brand-cyan/40"
+        />
+        <textarea
+          required
+          placeholder="Share your experience with HealOps... *"
+          rows={4}
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          className="w-full rounded-lg border border-white/10 bg-background/60 px-4 py-2.5 text-sm placeholder:text-muted-foreground/50 focus:border-brand-cyan/40 focus:outline-none focus:ring-1 focus:ring-brand-cyan/40 resize-none"
+        />
+
+        {error && <p className="text-xs text-red-400">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={loading || !userName || !rating || !title || !comment}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-cyan px-4 py-2.5 text-sm font-bold text-black transition-all hover:bg-brand-cyan/90 disabled:opacity-50"
+        >
+          {loading ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <>
+              Submit Review
+              <ArrowRight className="size-4" />
+            </>
+          )}
+        </button>
+      </form>
+    </motion.div>
+  );
+}
+
 /* ─── Beta Signup Form ──────────────────────────────────────────────────────── */
 
 function BetaSignupForm() {
@@ -386,7 +655,7 @@ function BetaSignupForm() {
 
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"}/v1/healops/beta/signup`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000"}/v1/healops/beta/signup`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

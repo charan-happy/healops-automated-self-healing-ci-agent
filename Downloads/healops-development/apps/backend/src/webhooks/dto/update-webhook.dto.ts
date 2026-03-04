@@ -16,7 +16,7 @@ export class UpdateWebhookDto {
     maxLength: 2048,
   })
   @IsOptional()
-  @IsUrl({}, { message: 'URL must be a valid URL' })
+  @IsUrl({ require_tld: false }, { message: 'URL must be a valid URL' })
   @MaxLength(2048, { message: 'URL must not exceed 2048 characters' })
   url?: string;
 

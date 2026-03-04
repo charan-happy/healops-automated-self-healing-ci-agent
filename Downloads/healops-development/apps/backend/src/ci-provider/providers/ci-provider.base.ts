@@ -7,6 +7,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderRepository,
   WebhookPayloadResult,
 } from '../interfaces/ci-provider.interface';
 
@@ -50,6 +51,19 @@ export abstract class CiProviderBase {
     config: CiConnectionConfig,
     externalRunId: string,
   ): Promise<string | null>;
+
+  // ─── Repository Discovery ──────────────────────────────────────────────────
+
+  /**
+   * List repositories accessible to this provider.
+   * Used for project selection after connecting a provider.
+   * @param authToken - Pre-resolved auth token
+   * @param serverUrl - Optional base URL for self-hosted instances
+   */
+  abstract listRepositories(
+    authToken: string,
+    serverUrl?: string,
+  ): Promise<ProviderRepository[]>;
 
   // ─── SCM Operations ─────────────────────────────────────────────────────────
 

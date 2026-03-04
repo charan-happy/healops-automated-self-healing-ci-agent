@@ -15,7 +15,7 @@ export class CreateWebhookDto {
     example: 'https://example.com/webhooks/receive',
     maxLength: 2048,
   })
-  @IsUrl({}, { message: 'URL must be a valid URL' })
+  @IsUrl({ require_tld: false }, { message: 'URL must be a valid URL' })
   @IsNotEmpty({ message: 'URL is required' })
   @MaxLength(2048, { message: 'URL must not exceed 2048 characters' })
   url!: string;

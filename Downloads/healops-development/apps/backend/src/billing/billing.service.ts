@@ -90,11 +90,23 @@ export class BillingService {
       });
     }
 
+    // Auto-detect UPI eligibility: if the plan price is in INR, include UPI
+    let paymentMethodTypes: string[] | undefined;
+    try {
+      const priceObj = await this.stripeProvider.retrievePrice(plan.stripePriceId);
+      if (priceObj.currency === 'inr') {
+        paymentMethodTypes = ['card', 'upi'];
+      }
+    } catch {
+      // Price lookup failed — fall back to Stripe Dashboard defaults
+    }
+
     const session = await this.stripeProvider.createCheckoutSession(
       stripeCustomerId ?? '',
       plan.stripePriceId,
       successUrl,
       cancelUrl,
+      paymentMethodTypes as Stripe.Checkout.SessionCreateParams.PaymentMethodType[] | undefined,
     );
 
     return { url: session.url ?? '' };

@@ -1,60 +1,69 @@
-// ─── CI Provider Settings Service ───────────────────────────────────────────
-// CRUD operations for CI provider configurations.
-// Reuses validation logic from OnboardingService.configureCiProvider().
+// ─── SCM Provider Settings Service ──────────────────────────────────────────
+// CRUD operations for Source Code Management provider configurations.
 
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CiProviderConfigsRepository } from '@db/repositories/healops/ci-provider-configs.repository';
+import { ScmProviderConfigsRepository } from '@db/repositories/healops/scm-provider-configs.repository';
 import { PlatformRepository } from '@db/repositories/healops/platform.repository';
 import { CiProviderFactory } from '../ci-provider/ci-provider.factory';
 import type { HealOpsConfig } from '@config/healops.config';
 
-interface AddProviderInput {
+const VALID_SCM_PROVIDERS = ['github', 'gitlab', 'bitbucket'] as const;
+
+interface AddScmProviderInput {
   provider: string;
   githubInstallationId?: string;
   accessToken?: string;
   serverUrl?: string;
+  workspace?: string;
   displayName?: string;
-  scmProvider?: string;
 }
 
-interface UpdateProviderInput {
+interface UpdateScmProviderInput {
   isActive?: boolean;
   accessToken?: string;
   serverUrl?: string;
   displayName?: string;
-  scmProvider?: string;
 }
 
 @Injectable()
-export class CiProviderSettingsService {
-  private readonly logger = new Logger(CiProviderSettingsService.name);
+export class ScmProviderSettingsService {
+  private readonly logger = new Logger(ScmProviderSettingsService.name);
 
   constructor(
-    private readonly ciProviderConfigsRepository: CiProviderConfigsRepository,
+    private readonly scmProviderConfigsRepository: ScmProviderConfigsRepository,
     private readonly platformRepository: PlatformRepository,
     private readonly ciProviderFactory: CiProviderFactory,
     private readonly configService: ConfigService,
   ) {}
 
   async listProviders(orgId: string) {
-    const configs = await this.ciProviderConfigsRepository.findConfigsByOrganization(orgId);
-    return configs.map((c) => ({
-      id: c.id,
-      providerType: c.providerType,
-      displayName: c.displayName,
-      isActive: c.isActive,
-      createdAt: c.createdAt.toISOString(),
-    }));
+    const configs = await this.scmProviderConfigsRepository.findConfigsByOrganization(orgId);
+    return configs.map((c) => {
+      const configData = (c.config as Record<string, unknown>) ?? {};
+      return {
+        id: c.id,
+        providerType: c.providerType,
+        displayName: c.displayName,
+        isActive: c.isActive,
+        hasToken: Boolean(configData['accessToken'] || configData['installationId']),
+        createdAt: c.createdAt.toISOString(),
+      };
+    });
   }
 
-  async addProvider(orgId: string, data: AddProviderInput) {
+  async addProvider(orgId: string, data: AddScmProviderInput) {
     const org = await this.platformRepository.findOrganizationById(orgId);
     if (!org) {
       throw new NotFoundException('Organization not found');
     }
 
-    // Build the config object based on provider type (same logic as OnboardingService)
+    if (!VALID_SCM_PROVIDERS.includes(data.provider as typeof VALID_SCM_PROVIDERS[number])) {
+      throw new BadRequestException(
+        `Unsupported SCM provider: ${data.provider}. Must be one of: ${VALID_SCM_PROVIDERS.join(', ')}`,
+      );
+    }
+
     const config: Record<string, unknown> = {};
     let displayName = data.displayName ?? data.provider;
     let installUrl: string | undefined;
@@ -67,7 +76,7 @@ export class CiProviderSettingsService {
         const healops = this.configService.get<HealOpsConfig>('healops');
         const appId = healops?.github.appId ?? '';
         if (appId) {
-          installUrl = `https://github.com/apps/healops/installations/new?target_id=${orgId}`;
+          installUrl = `https://github.com/apps/healops-dev/installations/new`;
         }
         displayName = data.displayName ?? 'GitHub';
         break;
@@ -83,45 +92,30 @@ export class CiProviderSettingsService {
         displayName = data.displayName ?? 'GitLab';
         break;
       }
-      case 'jenkins': {
-        if (!data.accessToken) {
-          throw new BadRequestException('Access token is required for Jenkins');
-        }
-        if (!data.serverUrl) {
-          throw new BadRequestException('Server URL is required for Jenkins');
-        }
-        // Jenkins provider expects authToken as "username:apiToken" for Basic auth
-        config['authToken'] = data.accessToken;
-        config['serverUrl'] = data.serverUrl;
-        if (data.scmProvider) {
-          config['scmProvider'] = data.scmProvider;
-        }
-        displayName = data.displayName ?? 'Jenkins';
-        break;
-      }
       case 'bitbucket': {
         if (!data.accessToken) {
-          throw new BadRequestException('Access token is required for Bitbucket');
+          throw new BadRequestException('App password is required for Bitbucket');
         }
         config['accessToken'] = data.accessToken;
+        if (data.workspace) {
+          config['workspace'] = data.workspace;
+        }
         if (data.serverUrl) {
           config['serverUrl'] = data.serverUrl;
         }
         displayName = data.displayName ?? 'Bitbucket';
         break;
       }
-      default:
-        throw new BadRequestException(`Unsupported provider: ${data.provider}`);
     }
 
-    const providerConfig = await this.ciProviderConfigsRepository.createConfig({
+    const providerConfig = await this.scmProviderConfigsRepository.createConfig({
       organizationId: orgId,
       providerType: data.provider,
       config,
       displayName,
     });
 
-    this.logger.log(`CI provider ${data.provider} added for org ${orgId}`);
+    this.logger.log(`SCM provider ${data.provider} added for org ${orgId}`);
 
     const result: { providerConfigId: string; provider: string; installUrl?: string } = {
       providerConfigId: providerConfig.id,
@@ -135,10 +129,10 @@ export class CiProviderSettingsService {
     return result;
   }
 
-  async updateProvider(configId: string, orgId: string, data: UpdateProviderInput) {
-    const existing = await this.ciProviderConfigsRepository.findConfigById(configId);
+  async updateProvider(configId: string, orgId: string, data: UpdateScmProviderInput) {
+    const existing = await this.scmProviderConfigsRepository.findConfigById(configId);
     if (!existing || existing.organizationId !== orgId) {
-      throw new NotFoundException('CI provider config not found');
+      throw new NotFoundException('SCM provider config not found');
     }
 
     const updateData: Record<string, unknown> = {};
@@ -150,8 +144,7 @@ export class CiProviderSettingsService {
       updateData['displayName'] = data.displayName;
     }
 
-    // Merge config fields if access token, server URL, or scmProvider changed
-    if (data.accessToken !== undefined || data.serverUrl !== undefined || data.scmProvider !== undefined) {
+    if (data.accessToken !== undefined || data.serverUrl !== undefined) {
       const existingConfig = (existing.config as Record<string, unknown>) ?? {};
       if (data.accessToken !== undefined) {
         existingConfig['accessToken'] = data.accessToken;
@@ -159,13 +152,10 @@ export class CiProviderSettingsService {
       if (data.serverUrl !== undefined) {
         existingConfig['serverUrl'] = data.serverUrl;
       }
-      if (data.scmProvider !== undefined) {
-        existingConfig['scmProvider'] = data.scmProvider;
-      }
       updateData['config'] = existingConfig;
     }
 
-    const updated = await this.ciProviderConfigsRepository.updateConfig(configId, updateData);
+    const updated = await this.scmProviderConfigsRepository.updateConfig(configId, updateData);
 
     return {
       id: updated?.id,
@@ -176,45 +166,20 @@ export class CiProviderSettingsService {
     };
   }
 
-  async removeProvider(configId: string, orgId: string) {
-    const existing = await this.ciProviderConfigsRepository.findConfigById(configId);
-    if (!existing || existing.organizationId !== orgId) {
-      throw new NotFoundException('CI provider config not found');
-    }
-
-    // Check if repos depend on this config
-    const repos = await this.platformRepository.findRepositoriesByOrganization(orgId);
-    const linkedRepos = repos.filter((r) => r.ciProviderConfigId === configId);
-
-    if (linkedRepos.length > 0) {
-      this.logger.warn(
-        `Deactivating provider ${configId} with ${String(linkedRepos.length)} linked repos`,
-      );
-    }
-
-    // Soft delete (deactivate)
-    await this.ciProviderConfigsRepository.deactivateConfig(configId);
-
-    return {
-      deactivated: true,
-      linkedRepoCount: linkedRepos.length,
-    };
-  }
-
   async listAvailableRepos(configId: string, orgId: string) {
-    const config = await this.ciProviderConfigsRepository.findConfigById(configId);
+    const config = await this.scmProviderConfigsRepository.findConfigById(configId);
     if (!config || config.organizationId !== orgId) {
-      throw new NotFoundException('CI provider config not found');
+      throw new NotFoundException('SCM provider config not found');
     }
 
     const configData = (config.config as Record<string, string>) ?? {};
 
     try {
       const provider = this.ciProviderFactory.getProvider(config.providerType);
-      const authToken = configData['authToken'] ?? configData['accessToken'] ?? configData['installationId'] ?? '';
+      const authToken = configData['accessToken'] ?? configData['installationId'] ?? '';
       const serverUrl = configData['serverUrl'];
 
-      this.logger.log(`Listing repos for provider ${provider.providerName} config ${configId}`);
+      this.logger.log(`Listing repos for SCM provider ${provider.providerName} config ${configId}`);
 
       const repos = await provider.listRepositories(authToken, serverUrl);
 
@@ -226,15 +191,28 @@ export class CiProviderSettingsService {
           name: r.fullName,
           defaultBranch: r.defaultBranch,
           language: r.language,
+          isPrivate: r.isPrivate,
+          url: r.url,
         })),
       };
     } catch (err) {
-      this.logger.warn(`Failed to list repos for config ${configId}: ${(err as Error).message}`);
+      this.logger.warn(`Failed to list repos for SCM config ${configId}: ${(err as Error).message}`);
       return {
         provider: config.providerType,
         providerConfigId: config.id,
         repos: [],
       };
     }
+  }
+
+  async removeProvider(configId: string, orgId: string) {
+    const existing = await this.scmProviderConfigsRepository.findConfigById(configId);
+    if (!existing || existing.organizationId !== orgId) {
+      throw new NotFoundException('SCM provider config not found');
+    }
+
+    await this.scmProviderConfigsRepository.deactivateConfig(configId);
+
+    return { deactivated: true };
   }
 }

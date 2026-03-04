@@ -7,6 +7,7 @@ import {
   fetchSubscription,
   fetchUsageStats,
   createCheckoutSession,
+  createPortalSession,
 } from "@/app/_libs/healops-api";
 import { trackEvent, POSTHOG_EVENTS } from "@/app/_libs/utils/analytics";
 import type {
@@ -197,7 +198,17 @@ export default function BillingPage() {
               View invoices, update payment method, or cancel subscription
             </p>
           </div>
-          <button className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-white/5">
+          <button
+            onClick={async () => {
+              const result = await createPortalSession(
+                `${window.location.origin}/settings/billing`,
+              );
+              if (result?.url) {
+                window.location.href = result.url;
+              }
+            }}
+            className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-white/5"
+          >
             Stripe Portal
             <ArrowUpRight className="size-3.5" />
           </button>

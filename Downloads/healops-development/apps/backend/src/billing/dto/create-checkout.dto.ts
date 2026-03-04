@@ -15,7 +15,7 @@ export class CreateCheckoutDto {
     description: 'URL to redirect to after successful checkout',
     example: 'https://app.healops.dev/billing?success=true',
   })
-  @IsUrl({}, { message: 'Success URL must be a valid URL' })
+  @IsUrl({ require_tld: false }, { message: 'Success URL must be a valid URL' })
   @IsNotEmpty({ message: 'Success URL is required' })
   successUrl!: string;
 
@@ -23,7 +23,7 @@ export class CreateCheckoutDto {
     description: 'URL to redirect to if the user cancels checkout',
     example: 'https://app.healops.dev/billing?canceled=true',
   })
-  @IsUrl({}, { message: 'Cancel URL must be a valid URL' })
+  @IsUrl({ require_tld: false }, { message: 'Cancel URL must be a valid URL' })
   @IsNotEmpty({ message: 'Cancel URL is required' })
   cancelUrl!: string;
 }

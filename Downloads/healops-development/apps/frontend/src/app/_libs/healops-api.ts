@@ -13,6 +13,10 @@ export function getAccessToken(): string | null {
   return _accessToken;
 }
 
+export function isDemoMode(): boolean {
+  return _accessToken === "demo-token";
+}
+
 function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (_accessToken) {
@@ -315,6 +319,10 @@ export async function configureCiProvider(data: {
   provider: string;
   githubInstallationId?: string;
   accessToken?: string;
+  apiToken?: string;
+  username?: string;
+  appPassword?: string;
+  workspace?: string;
   serverUrl?: string;
   scmProvider?: string;
 }): Promise<unknown> {
@@ -324,10 +332,15 @@ export async function configureCiProvider(data: {
       headers: authHeaders(),
       body: JSON.stringify(data),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => null);
+      console.error("[configureCiProvider] failed:", res.status, errorBody);
+      return null;
+    }
     const body = (await res.json()) as ApiEnvelope<unknown>;
     return body.data ?? null;
-  } catch {
+  } catch (err) {
+    console.error("[configureCiProvider] error:", err);
     return null;
   }
 }
@@ -363,6 +376,235 @@ export async function configureLlm(data: {
     });
     if (!res.ok) return null;
     const body = (await res.json()) as ApiEnvelope<unknown>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Organization Settings API ──────────────────────────────────────────────
+
+import type { Organization, Member } from "./types/settings";
+
+export interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export async function fetchOrganization(): Promise<Organization | null> {
+  return fetchApi<Organization>("/v1/healops/settings/organization");
+}
+
+export async function updateOrganization(data: {
+  name?: string;
+  slackWebhookUrl?: string;
+}): Promise<Organization | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/organization`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<Organization>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchMembers(): Promise<Member[] | null> {
+  return fetchApi<Member[]>("/v1/healops/settings/organization/members");
+}
+
+export async function inviteMember(
+  email: string,
+  role = "member",
+): Promise<Invitation | null> {
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/v1/healops/settings/organization/members/invite`,
+      {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ email, role }),
+      },
+    );
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => null);
+      console.error("[inviteMember] failed:", res.status, errorBody);
+      return null;
+    }
+    const body = (await res.json()) as ApiEnvelope<Invitation>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function removeMember(userId: string): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/v1/healops/settings/organization/members/${userId}`,
+      { method: "DELETE", headers: authHeaders() },
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchInvitations(): Promise<Invitation[] | null> {
+  return fetchApi<Invitation[]>(
+    "/v1/healops/settings/organization/invitations",
+  );
+}
+
+export async function revokeInvitation(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/v1/healops/settings/organization/invitations/${id}`,
+      { method: "DELETE", headers: authHeaders() },
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ─── AI Config Settings API ─────────────────────────────────────────────────
+
+export interface AIConfigResponse {
+  provider: string;
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
+export async function fetchAiConfig(): Promise<AIConfigResponse | null> {
+  return fetchApi<AIConfigResponse>("/v1/healops/settings/ai-config");
+}
+
+export async function updateAiConfig(data: {
+  provider: string;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}): Promise<unknown> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/ai-config`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<unknown>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Notification Settings API ──────────────────────────────────────────────
+
+export interface NotificationSetting {
+  id: string;
+  channel: string;
+  events: string[];
+  config: Record<string, string>;
+  isActive: boolean;
+}
+
+export async function fetchNotificationSettings(): Promise<NotificationSetting[] | null> {
+  return fetchApi<NotificationSetting[]>("/v1/healops/settings/notifications");
+}
+
+export async function updateNotificationSettings(data: {
+  channels: Array<{
+    channel: string;
+    enabled: boolean;
+    config: Record<string, string>;
+  }>;
+  events: string[];
+}): Promise<unknown> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/notifications`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<unknown>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── API Keys Settings API ──────────────────────────────────────────────────
+
+export async function fetchApiKeys(): Promise<Array<{
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}> | null> {
+  return fetchApi<Array<{
+    id: string;
+    name: string;
+    prefix: string;
+    createdAt: string;
+    lastUsedAt: string | null;
+  }>>("/v1/healops/settings/api-keys");
+}
+
+export async function createApiKey(name: string): Promise<{
+  key: string;
+  prefix: string;
+  id: string;
+} | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/api-keys`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<{ key: string; prefix: string; id: string }>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteApiKey(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/api-keys/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Billing Portal API ─────────────────────────────────────────────────────
+
+export async function createPortalSession(returnUrl: string): Promise<{ url: string } | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/billing/portal`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ returnUrl }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<{ url: string }>;
     return body.data ?? null;
   } catch {
     return null;
@@ -458,6 +700,94 @@ export async function fetchAvailableRepos(
   );
 }
 
+// ─── SCM Provider Settings API ───────────────────────────────────────────────
+
+import type { SCMProviderConfig } from "./types/settings";
+
+export interface ScmProviderCreatePayload {
+  provider: string;
+  githubInstallationId?: string;
+  accessToken?: string;
+  serverUrl?: string;
+  workspace?: string;
+  displayName?: string;
+}
+
+export interface ScmProviderUpdatePayload {
+  isActive?: boolean;
+  accessToken?: string;
+  serverUrl?: string;
+  displayName?: string;
+}
+
+export async function fetchScmProviders(): Promise<SCMProviderConfig[] | null> {
+  return fetchApi<SCMProviderConfig[]>("/v1/healops/settings/scm-providers");
+}
+
+export async function addScmProvider(
+  data: ScmProviderCreatePayload,
+): Promise<{ providerConfigId: string; provider: string; installUrl?: string } | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/scm-providers`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<{ providerConfigId: string; provider: string; installUrl?: string }>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateScmProvider(
+  id: string,
+  data: ScmProviderUpdatePayload,
+): Promise<SCMProviderConfig | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/scm-providers/${id}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<SCMProviderConfig>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export interface ScmAvailableRepo {
+  externalRepoId: string;
+  name: string;
+  defaultBranch: string;
+  language: string | null;
+  isPrivate: boolean;
+  url: string;
+}
+
+export async function fetchScmAvailableRepos(
+  providerConfigId: string,
+): Promise<{ provider: string; providerConfigId: string; repos: ScmAvailableRepo[] } | null> {
+  return fetchApi<{ provider: string; providerConfigId: string; repos: ScmAvailableRepo[] }>(
+    `/v1/healops/settings/scm-providers/${providerConfigId}/repos`,
+  );
+}
+
+export async function deleteScmProvider(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/scm-providers/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Billing API ────────────────────────────────────────────────────────────
 
 import type { BillingPlan, Subscription, UsageStats } from "./types/settings";
@@ -530,4 +860,77 @@ export async function fetchBranchCommits(
   return fetchApi<CommitResponse[]>(
     `/v1/healops/projects/${repositoryId}/branches/${branchId}/commits?limit=${limit}&offset=${offset}`,
   );
+}
+
+// ─── Public Reviews API ─────────────────────────────────────────────────────
+
+export interface PublicReview {
+  id: string;
+  userName: string;
+  userRole: string | null;
+  userCompany: string | null;
+  rating: number;
+  title: string;
+  comment: string;
+  createdAt: string;
+}
+
+export interface ReviewStats {
+  averageRating: number;
+  totalCount: number;
+  fiveStarCount: number;
+}
+
+export interface ReviewsListResponse {
+  reviews: PublicReview[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function fetchPublicReviews(
+  limit = 20,
+): Promise<ReviewsListResponse | null> {
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/v1/healops/reviews?limit=${limit}`,
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<ReviewsListResponse>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchReviewStats(): Promise<ReviewStats | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/reviews/stats`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<ReviewStats>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function submitReview(data: {
+  userName: string;
+  userEmail?: string;
+  userRole?: string;
+  userCompany?: string;
+  rating: number;
+  title: string;
+  comment: string;
+}): Promise<boolean> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/reviews`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }

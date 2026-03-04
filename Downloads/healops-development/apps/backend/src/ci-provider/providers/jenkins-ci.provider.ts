@@ -12,6 +12,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderRepository,
   WebhookPayloadResult,
 } from '../interfaces/ci-provider.interface';
 
@@ -215,6 +216,15 @@ export class JenkinsCiProvider extends CiProviderBase {
       );
       return null;
     }
+  }
+
+  // ─── Repository Discovery (Not Supported) ────────────────────────────────
+
+  override async listRepositories(
+    _authToken: string,
+    _serverUrl?: string,
+  ): Promise<ProviderRepository[]> {
+    return []; // Jenkins is CI-only, repos are listed via the linked SCM provider
   }
 
   // ─── SCM Operations (Not Supported) ───────────────────────────────────────

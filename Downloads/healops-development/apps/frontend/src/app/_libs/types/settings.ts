@@ -23,6 +23,15 @@ export interface CIProviderConfig {
   createdAt: string;
 }
 
+export interface SCMProviderConfig {
+  id: string;
+  providerType: string;
+  displayName: string | null;
+  isActive: boolean;
+  hasToken: boolean;
+  createdAt: string;
+}
+
 export interface AIConfig {
   provider: string;
   model: string;

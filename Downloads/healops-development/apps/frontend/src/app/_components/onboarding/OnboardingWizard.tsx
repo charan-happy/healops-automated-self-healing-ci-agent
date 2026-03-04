@@ -10,6 +10,7 @@ import {
   configureCiProvider,
   selectRepositories,
   configureLlm,
+  isDemoMode,
 } from "@/app/_libs/healops-api";
 import { useOrg } from "@/app/_libs/context/OrgContext";
 import { trackEvent, POSTHOG_EVENTS } from "@/app/_libs/utils/analytics";
@@ -68,13 +69,16 @@ export default function OnboardingWizard() {
     try {
       const step = STEPS[currentIndex];
       if (!step) return;
+      const demo = isDemoMode();
 
       if (step.key === "create_organization" && data.organization) {
         trackEvent(POSTHOG_EVENTS.ONBOARDING_ORG_CREATED, { orgName: data.organization.name });
-        const result = await createOrganization({
-          name: data.organization.name,
-        });
-        if (!result) throw new Error("Failed to create organization");
+        if (!demo) {
+          const result = await createOrganization({
+            name: data.organization.name,
+          });
+          if (!result) throw new Error("Failed to create organization");
+        }
       }
 
       if (step.key === "select_ci_provider") {
@@ -82,42 +86,48 @@ export default function OnboardingWizard() {
         trackEvent(POSTHOG_EVENTS.ONBOARDING_CI_PROVIDER_CONFIGURED, { providers: providers.map((p) => p.type), count: providers.length });
         if (providers.length === 0) throw new Error("Please select at least one CI provider");
 
-        const configIds: string[] = [];
-        for (const provider of providers) {
-          const result = await configureCiProvider({
-            provider: provider.type,
-            ...provider.config,
-          });
-          if (!result) throw new Error(`Failed to configure ${provider.type}`);
-          const resultData = result as { providerConfigId?: string };
-          if (resultData.providerConfigId) {
-            configIds.push(resultData.providerConfigId);
+        if (!demo) {
+          const configIds: string[] = [];
+          for (const provider of providers) {
+            const result = await configureCiProvider({
+              provider: provider.type,
+              ...provider.config,
+            });
+            if (!result) throw new Error(`Failed to configure ${provider.type}`);
+            const resultData = result as { providerConfigId?: string };
+            if (resultData.providerConfigId) {
+              configIds.push(resultData.providerConfigId);
+            }
           }
-        }
 
-        // Store provider config IDs back into data for repo selection step
-        if (configIds.length > 0) {
-          const updatedProviders = providers.map((p, i) => ({
-            ...p,
-            providerConfigId: configIds[i],
-          }));
-          setData((prev) => ({ ...prev, ciProviders: updatedProviders }));
+          // Store provider config IDs back into data for repo selection step
+          if (configIds.length > 0) {
+            const updatedProviders = providers.map((p, i) => ({
+              ...p,
+              providerConfigId: configIds[i],
+            }));
+            setData((prev) => ({ ...prev, ciProviders: updatedProviders }));
+          }
         }
       }
 
       if (step.key === "select_repositories" && data.repositories) {
-        const result = await selectRepositories({
-          repositories: data.repositories,
-        });
-        if (!result) throw new Error("Failed to save repositories");
+        if (!demo) {
+          const result = await selectRepositories({
+            repositories: data.repositories,
+          });
+          if (!result) throw new Error("Failed to save repositories");
+        }
       }
 
       if (step.key === "configure_ai" && data.aiConfig) {
-        const result = await configureLlm({
-          provider: data.aiConfig.provider,
-          ...data.aiConfig.config,
-        });
-        if (!result) throw new Error("Failed to configure AI provider");
+        if (!demo) {
+          const result = await configureLlm({
+            provider: data.aiConfig.provider,
+            ...data.aiConfig.config,
+          });
+          if (!result) throw new Error("Failed to configure AI provider");
+        }
       }
 
       setCurrentIndex((i) => Math.min(i + 1, STEPS.length - 1));
@@ -138,7 +148,8 @@ export default function OnboardingWizard() {
     setSubmitting(true);
     setError(null);
     try {
-      if (data.aiConfig) {
+      const demo = isDemoMode();
+      if (data.aiConfig && !demo) {
         const result = await configureLlm({
           provider: data.aiConfig.provider,
           ...data.aiConfig.config,
@@ -146,7 +157,9 @@ export default function OnboardingWizard() {
         if (!result) throw new Error("Failed to configure AI");
       }
       trackEvent(POSTHOG_EVENTS.ONBOARDING_COMPLETED);
-      await refresh();
+      if (!demo) {
+        await refresh();
+      }
       router.push("/dashboard" as const);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Activation failed");

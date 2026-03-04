@@ -14,6 +14,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderRepository,
   WebhookPayloadResult,
 } from '../interfaces/ci-provider.interface';
 
@@ -46,6 +47,61 @@ export class GitLabCiProvider extends CiProviderBase {
    */
   private projectPath(config: CiConnectionConfig): string {
     return encodeURIComponent(config.repo);
+  }
+
+  // ─── Repository Discovery ────────────────────────────────────────────────
+
+  override async listRepositories(
+    authToken: string,
+    serverUrl?: string,
+  ): Promise<ProviderRepository[]> {
+    const baseURL = serverUrl ?? 'https://gitlab.com';
+    const client = axios.create({
+      baseURL: `${baseURL}/api/v4`,
+      headers: { 'PRIVATE-TOKEN': authToken, 'Content-Type': 'application/json' },
+      timeout: 30_000,
+    });
+
+    const repos: ProviderRepository[] = [];
+    let page = 1;
+    const perPage = 100;
+
+    try {
+      while (true) {
+        const response = await client.get('/projects', {
+          params: {
+            membership: true,
+            per_page: perPage,
+            page,
+            order_by: 'last_activity_at',
+            sort: 'desc',
+            simple: true,
+          },
+        });
+        const projects = response.data as Array<Record<string, unknown>>;
+        if (!projects || projects.length === 0) break;
+
+        for (const p of projects) {
+          repos.push({
+            externalRepoId: String(p['id'] ?? ''),
+            name: String(p['path'] ?? ''),
+            fullName: String(p['path_with_namespace'] ?? ''),
+            defaultBranch: String(p['default_branch'] ?? 'main'),
+            language: null,
+            isPrivate: (p['visibility'] as string) === 'private',
+            url: String(p['web_url'] ?? ''),
+          });
+        }
+
+        if (projects.length < perPage) break;
+        page++;
+        if (page > 5) break; // Safety cap at 500 repos
+      }
+    } catch (error) {
+      this.logger.error(`Failed to list GitLab projects: ${(error as Error).message}`);
+    }
+
+    return repos;
   }
 
   // ─── Webhook ──────────────────────────────────────────────────────────────

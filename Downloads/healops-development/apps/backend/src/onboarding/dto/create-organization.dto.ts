@@ -17,6 +17,6 @@ export class CreateOrganizationDto {
     example: 'https://hooks.slack.com/services/T00/B00/xxx',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'Please provide a valid URL' })
+  @IsUrl({ require_tld: false }, { message: 'Please provide a valid URL' })
   slackWebhookUrl?: string;
 }

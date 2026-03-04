@@ -26,6 +26,10 @@ interface ConfigureCiProviderInput {
   provider: string;
   githubInstallationId?: string;
   accessToken?: string;
+  apiToken?: string;
+  username?: string;
+  appPassword?: string;
+  workspace?: string;
   serverUrl?: string;
   scmProvider?: string;
 }
@@ -144,13 +148,16 @@ export class OnboardingService {
         break;
       }
       case 'jenkins': {
-        if (!data.accessToken) {
+        const token = data.accessToken ?? data.apiToken;
+        if (!token) {
           throw new BadRequestException('Access token is required for Jenkins');
         }
-        config['accessToken'] = data.accessToken;
         if (!data.serverUrl) {
           throw new BadRequestException('Server URL is required for Jenkins');
         }
+        // Jenkins provider expects authToken as "username:apiToken" for Basic auth
+        const username = data.username ?? '';
+        config['authToken'] = `${username}:${token}`;
         config['serverUrl'] = data.serverUrl;
         if (data.scmProvider) {
           config['scmProvider'] = data.scmProvider;
@@ -159,10 +166,14 @@ export class OnboardingService {
         break;
       }
       case 'bitbucket': {
-        if (!data.accessToken) {
-          throw new BadRequestException('Access token is required for Bitbucket');
+        const token = data.accessToken ?? data.appPassword;
+        if (!token) {
+          throw new BadRequestException('Access token or app password is required for Bitbucket');
         }
-        config['accessToken'] = data.accessToken;
+        config['accessToken'] = token;
+        if (data.workspace) {
+          config['workspace'] = data.workspace;
+        }
         if (data.serverUrl) {
           config['serverUrl'] = data.serverUrl;
         }

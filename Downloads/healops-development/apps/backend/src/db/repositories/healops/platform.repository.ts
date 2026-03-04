@@ -58,6 +58,26 @@ export class PlatformRepository {
     }
   }
 
+  async updateOrganization(
+    id: string,
+    data: { name?: string; slug?: string; slackWebhookUrl?: string | null },
+  ) {
+    const setData: Record<string, unknown> = {};
+    if (data.name !== undefined) setData['name'] = data.name;
+    if (data.slug !== undefined) setData['slug'] = data.slug;
+    if (data.slackWebhookUrl !== undefined)
+      setData['slackWebhookUrl'] = data.slackWebhookUrl;
+
+    if (Object.keys(setData).length === 0) return this.findOrganizationById(id);
+
+    const [row] = await this.dbService.db
+      .update(organizations)
+      .set(setData)
+      .where(eq(organizations.id, id))
+      .returning();
+    return row ?? null;
+  }
+
   // ─── Repositories ──────────────────────────────────────────────────────
 
   async findRepositoryById(id: string) {

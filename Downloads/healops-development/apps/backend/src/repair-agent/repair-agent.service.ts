@@ -962,7 +962,7 @@ export class RepairAgentService {
           return this.ciProviderFactory.buildConnectionConfig({
             name: `${repoContext.owner}/${repoContext.repo}`,
             provider: configRecord.providerType,
-            authToken: storedConfig['accessToken'] ?? storedConfig['installationId'] ?? '',
+            authToken: storedConfig['authToken'] ?? storedConfig['accessToken'] ?? storedConfig['installationId'] ?? '',
             githubInstallationId: storedConfig['installationId'] ?? repoContext.installationId,
           });
         }

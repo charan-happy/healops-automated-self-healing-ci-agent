@@ -78,6 +78,7 @@ import { CiProviderModule } from './ci-provider/ci-provider.module';
 import { CiWebhookModule } from './ci-webhook/ci-webhook.module';
 import { SettingsModule } from './settings/settings.module';
 import { ProjectsModule } from './projects/projects.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -209,6 +210,7 @@ const cacheModule = CacheModule.registerAsync({
     CiWebhookModule,
     SettingsModule,
     ProjectsModule,
+    ReviewsModule,
 
     // APIs
     MetricsModule,

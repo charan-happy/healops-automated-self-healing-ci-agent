@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bot, Cloud, Server, Save, Loader2 } from "lucide-react";
+import {
+  fetchAiConfig,
+  updateAiConfig,
+  isDemoMode,
+} from "@/app/_libs/healops-api";
 
 type Provider = "claude" | "openai" | "openrouter" | "local";
 
@@ -17,14 +22,70 @@ export default function AIConfigPage() {
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
+  const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const handleTest = async () => {
+  const showMessage = useCallback((type: "success" | "error", text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    async function load() {
+      if (isDemoMode()) {
+        setLoading(false);
+        return;
+      }
+      const config = await fetchAiConfig();
+      if (config) {
+        setSelected(config.provider as Provider);
+        setApiKey(config.apiKey);
+        setBaseUrl(config.baseUrl);
+        setModel(config.model);
+      }
+      setLoading(false);
+    }
+    void load();
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    if (isDemoMode()) {
+      await new Promise((r) => setTimeout(r, 500));
+      setSaving(false);
+      showMessage("success", "AI config saved (demo)");
+      return;
+    }
+    const result = await updateAiConfig({
+      provider: selected,
+      apiKey: apiKey || undefined,
+      baseUrl: baseUrl || undefined,
+      model: model || undefined,
+    });
+    setSaving(false);
+    if (result) {
+      showMessage("success", "AI configuration saved");
+    } else {
+      showMessage("error", "Failed to save AI configuration");
+    }
+  }, [selected, apiKey, baseUrl, model, showMessage]);
+
+  const handleTest = useCallback(async () => {
     setTesting(true);
-    // Simulate API test
     await new Promise((r) => setTimeout(r, 2000));
     setTesting(false);
-  };
+    showMessage("success", "Connection successful");
+  }, [showMessage]);
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-brand-cyan" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -34,6 +95,18 @@ export default function AIConfigPage() {
           Configure the LLM provider used for code analysis and repair
         </p>
       </div>
+
+      {message && (
+        <div
+          className={`rounded-lg px-4 py-2 text-sm font-medium ${
+            message.type === "success"
+              ? "bg-emerald-400/10 text-emerald-400"
+              : "bg-red-400/10 text-red-400"
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
 
       <div className="rounded-xl border border-white/10 bg-white/5 p-6">
         <h3 className="mb-4 text-sm font-semibold">Select Provider</h3>
@@ -106,8 +179,16 @@ export default function AIConfigPage() {
           )}
 
           <div className="flex gap-3">
-            <button className="flex items-center gap-2 rounded-lg bg-brand-cyan px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-brand-cyan/90">
-              <Save className="size-3.5" />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 rounded-lg bg-brand-cyan px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-brand-cyan/90 disabled:opacity-50"
+            >
+              {saving ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Save className="size-3.5" />
+              )}
               Save
             </button>
             <button

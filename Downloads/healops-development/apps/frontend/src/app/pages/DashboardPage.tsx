@@ -10,8 +10,14 @@ import {
   fetchDashboardMetrics,
   fetchRecentJobs,
   fetchTrendData,
+  fetchCiProviders,
+  fetchScmProviders,
+  isDemoMode,
 } from "../_libs/healops-api";
 import type { DashboardMetrics, RecentJob, TrendDataPoint, RepoHealth } from "../_libs/types/dashboard";
+import type { CIProviderConfig, SCMProviderConfig } from "../_libs/types/settings";
+import { CheckCircle2, XCircle, GitBranch, FolderGit2, Settings } from "lucide-react";
+import Link from "next/link";
 
 // ─── Demo data (used when backend is unreachable) ──────────────────────────
 
@@ -69,17 +75,24 @@ export default function DashboardPage() {
   const [recentJobs, setRecentJobs] = useState<RecentJob[] | null>(null);
   const [trendData, setTrendData] = useState<TrendDataPoint[] | null>(null);
   const [repoHealth, setRepoHealth] = useState<RepoHealth[] | null>(null);
+  const [ciProviders, setCiProviders] = useState<CIProviderConfig[]>([]);
+  const [scmProviders, setScmProviders] = useState<SCMProviderConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [m, jobs, trends] = await Promise.all([
+        const [m, jobs, trends, ci, scm] = await Promise.all([
           fetchDashboardMetrics(),
           fetchRecentJobs(),
           fetchTrendData("30d"),
+          isDemoMode() ? Promise.resolve(null) : fetchCiProviders(),
+          isDemoMode() ? Promise.resolve(null) : fetchScmProviders(),
         ]);
+
+        if (ci) setCiProviders(ci);
+        if (scm) setScmProviders(scm);
 
         // Use API data if available, otherwise fall back to demo data
         setMetrics(m ?? DEMO_METRICS);
@@ -152,6 +165,122 @@ export default function DashboardPage() {
           Agent Active
         </div>
       </div>
+
+      {/* Connected Providers */}
+      {!loading && (ciProviders.length > 0 || scmProviders.length > 0) && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* CI Providers Card */}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg bg-violet-500/10 p-2">
+                  <GitBranch className="size-4 text-violet-400" />
+                </div>
+                <h3 className="text-sm font-semibold">CI Providers</h3>
+              </div>
+              <Link
+                href="/settings/ci-providers"
+                className="rounded p-1 text-muted-foreground transition-all hover:text-foreground"
+              >
+                <Settings className="size-3.5" />
+              </Link>
+            </div>
+            {ciProviders.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No CI providers connected.{" "}
+                <Link href="/settings/ci-providers" className="text-brand-cyan hover:underline">
+                  Add one
+                </Link>
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {ciProviders.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2">
+                    {p.isActive ? (
+                      <CheckCircle2 className="size-3.5 text-emerald-400" />
+                    ) : (
+                      <XCircle className="size-3.5 text-red-400" />
+                    )}
+                    <span className="text-sm">{p.displayName ?? p.providerType}</span>
+                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                      {p.providerType}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* SCM Providers Card */}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg bg-brand-cyan/10 p-2">
+                  <FolderGit2 className="size-4 text-brand-cyan" />
+                </div>
+                <h3 className="text-sm font-semibold">SCM Providers</h3>
+              </div>
+              <Link
+                href="/settings/scm-providers"
+                className="rounded p-1 text-muted-foreground transition-all hover:text-foreground"
+              >
+                <Settings className="size-3.5" />
+              </Link>
+            </div>
+            {scmProviders.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No source code providers connected.{" "}
+                <Link href="/settings/scm-providers" className="text-brand-cyan hover:underline">
+                  Add one
+                </Link>
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {scmProviders.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2">
+                    {p.isActive ? (
+                      <CheckCircle2 className="size-3.5 text-emerald-400" />
+                    ) : (
+                      <XCircle className="size-3.5 text-red-400" />
+                    )}
+                    <span className="text-sm">{p.displayName ?? p.providerType}</span>
+                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                      {p.providerType}
+                    </span>
+                    {p.hasToken && (
+                      <span className="text-[10px] text-emerald-400">Connected</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* No providers connected — prompt to set up */}
+      {!loading && ciProviders.length === 0 && scmProviders.length === 0 && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-amber-500/10 p-2">
+              <Settings className="size-5 text-amber-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-amber-300">Get Started</p>
+              <p className="text-xs text-muted-foreground">
+                Connect your CI and source code providers to start monitoring pipelines.{" "}
+                <Link href="/settings/ci-providers" className="text-brand-cyan hover:underline">
+                  CI Providers
+                </Link>
+                {" | "}
+                <Link href="/settings/scm-providers" className="text-brand-cyan hover:underline">
+                  SCM Providers
+                </Link>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Metrics */}
       <MetricsGrid metrics={metrics} loading={loading} />

@@ -29,6 +29,38 @@ export class ConfigureCiProviderDto {
   accessToken?: string;
 
   @ApiPropertyOptional({
+    description: 'API token (alias for accessToken, used by Jenkins)',
+    example: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  })
+  @IsOptional()
+  @IsString()
+  apiToken?: string;
+
+  @ApiPropertyOptional({
+    description: 'Username for the CI provider (required for Jenkins)',
+    example: 'admin',
+  })
+  @IsOptional()
+  @IsString()
+  username?: string;
+
+  @ApiPropertyOptional({
+    description: 'App password for Bitbucket',
+    example: 'ATBBxxxxxxxx',
+  })
+  @IsOptional()
+  @IsString()
+  appPassword?: string;
+
+  @ApiPropertyOptional({
+    description: 'Workspace slug for Bitbucket',
+    example: 'my-workspace',
+  })
+  @IsOptional()
+  @IsString()
+  workspace?: string;
+
+  @ApiPropertyOptional({
     description: 'Server URL for self-hosted instances (e.g., GitLab CE/EE, Jenkins)',
     example: 'https://gitlab.example.com',
   })

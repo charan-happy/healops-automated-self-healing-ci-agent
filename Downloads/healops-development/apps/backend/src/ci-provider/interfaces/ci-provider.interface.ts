@@ -59,6 +59,17 @@ export interface WebhookPayloadResult {
   raw: Record<string, unknown>;
 }
 
+/** Result of listing repositories accessible to this provider */
+export interface ProviderRepository {
+  externalRepoId: string;
+  name: string;
+  fullName: string;
+  defaultBranch: string;
+  language: string | null;
+  isPrivate: boolean;
+  url: string;
+}
+
 /** Result of creating a pull request / merge request */
 export interface CreatePrResult {
   number: number;

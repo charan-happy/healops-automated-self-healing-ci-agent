@@ -176,6 +176,20 @@
       "when": 1772468976781,
       "tag": "0024_add_steps_to_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1772668800000,
+      "tag": "0025_public_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1772755200000,
+      "tag": "0026_scm_provider_configs",
+      "breakpoints": true
     }
   ]
 }

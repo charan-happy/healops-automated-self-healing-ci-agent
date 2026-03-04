@@ -11,8 +11,12 @@ export class TransformInterceptor<T> implements NestInterceptor<T, ApiResponse<T
     if (context.getType() === 'http') {
       const request = context.switchToHttp().getRequest();
 
-      // Exclude specific routes
-      if (request.url.includes(RouteNames.METRICS) || request.url.includes(RouteNames.HEALTH)) {
+      // Exclude infrastructure routes (Prometheus /metrics, /health) — NOT healops dashboard/metrics
+      const path: string = request.url;
+      if (
+        (path === `/${RouteNames.METRICS}` || path.startsWith(`/${RouteNames.METRICS}?`)) ||
+        (path === `/${RouteNames.HEALTH}` || path.startsWith(`/${RouteNames.HEALTH}?`) || path.startsWith(`/${RouteNames.HEALTH}/`))
+      ) {
         return next.handle();
       }
 

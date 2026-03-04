@@ -54,6 +54,7 @@ import { HealOpsLogo } from "@/app/_components/HealOpsLogo";
 const settingsSubItems = [
   { title: "Organization", href: "/settings/organization" as const, icon: Building2 },
   { title: "CI Providers", href: "/settings/ci-providers" as const, icon: GitBranch },
+  { title: "SCM Providers", href: "/settings/scm-providers" as const, icon: FolderGit2 },
   { title: "AI Config", href: "/settings/ai-config" as const, icon: Cpu },
   { title: "Billing", href: "/settings/billing" as const, icon: CreditCard },
   { title: "Notifications", href: "/settings/notifications" as const, icon: Bell },

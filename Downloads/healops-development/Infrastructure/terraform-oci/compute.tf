@@ -108,7 +108,7 @@ resource "oci_core_public_ip" "healops" {
 
 # Get the instance's primary private IP to attach the reserved public IP
 data "oci_core_private_ips" "healops" {
-  vnic_id = oci_core_instance.healops.create_vnic_details[0].vnic_id
+  vnic_id = data.oci_core_vnic_attachments.healops.vnic_attachments[0].vnic_id
 
   depends_on = [oci_core_instance.healops]
 }

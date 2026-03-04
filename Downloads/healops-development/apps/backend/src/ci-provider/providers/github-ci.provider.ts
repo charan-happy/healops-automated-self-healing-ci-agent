@@ -13,6 +13,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderRepository,
   WebhookPayloadResult,
 } from '../interfaces/ci-provider.interface';
 
@@ -38,6 +39,59 @@ export class GitHubCiProvider extends CiProviderBase {
       },
       timeout: 30_000,
     });
+  }
+
+  // ─── Repository Discovery ────────────────────────────────────────────────
+
+  override async listRepositories(
+    authToken: string,
+    serverUrl?: string,
+  ): Promise<ProviderRepository[]> {
+    const baseURL = serverUrl ?? 'https://api.github.com';
+    const client = axios.create({
+      baseURL,
+      headers: {
+        Authorization: `token ${authToken}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      timeout: 30_000,
+    });
+
+    const repos: ProviderRepository[] = [];
+    let page = 1;
+    const perPage = 100;
+
+    try {
+      while (true) {
+        const response = await client.get('/installation/repositories', {
+          params: { per_page: perPage, page },
+        });
+        const data = response.data as { repositories?: Array<Record<string, unknown>> };
+        const repositories = data.repositories ?? [];
+        if (repositories.length === 0) break;
+
+        for (const r of repositories) {
+          repos.push({
+            externalRepoId: String(r['id'] ?? ''),
+            name: String(r['name'] ?? ''),
+            fullName: String(r['full_name'] ?? ''),
+            defaultBranch: String(r['default_branch'] ?? 'main'),
+            language: (r['language'] as string | null) ?? null,
+            isPrivate: Boolean(r['private']),
+            url: String(r['html_url'] ?? ''),
+          });
+        }
+
+        if (repositories.length < perPage) break;
+        page++;
+        if (page > 5) break; // Safety cap at 500 repos
+      }
+    } catch (error) {
+      this.logger.error(`Failed to list GitHub repos: ${(error as Error).message}`);
+    }
+
+    return repos;
   }
 
   // ─── Webhook ──────────────────────────────────────────────────────────────

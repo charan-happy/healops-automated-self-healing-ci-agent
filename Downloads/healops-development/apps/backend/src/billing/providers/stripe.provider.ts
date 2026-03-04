@@ -47,14 +47,28 @@ export class StripeProvider {
     priceId: string,
     successUrl: string,
     cancelUrl: string,
+    paymentMethodTypes?: Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
   ): Promise<Stripe.Checkout.Session> {
-    return this.getStripe().checkout.sessions.create({
+    const params: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-    });
+    };
+    // When payment method types are specified (e.g. ['card', 'upi'] for INR prices),
+    // pass them explicitly. Otherwise Stripe uses Dashboard-configured methods.
+    if (paymentMethodTypes && paymentMethodTypes.length > 0) {
+      params.payment_method_types = paymentMethodTypes;
+    }
+    return this.getStripe().checkout.sessions.create(params);
+  }
+
+  /**
+   * Retrieve a Stripe Price to inspect its currency and metadata.
+   */
+  async retrievePrice(priceId: string): Promise<Stripe.Price> {
+    return this.getStripe().prices.retrieve(priceId);
   }
 
   /**

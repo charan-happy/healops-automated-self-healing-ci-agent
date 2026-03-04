@@ -6,7 +6,7 @@ export class CreatePortalDto {
     description: 'URL to redirect the user back to after leaving the Stripe portal',
     example: 'https://app.healops.dev/billing',
   })
-  @IsUrl({}, { message: 'Return URL must be a valid URL' })
+  @IsUrl({ require_tld: false }, { message: 'Return URL must be a valid URL' })
   @IsNotEmpty({ message: 'Return URL is required' })
   returnUrl!: string;
 }
