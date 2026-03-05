@@ -21,7 +21,7 @@ export class GithubOAuthStrategy extends PassportStrategy(Strategy, 'github') {
     const clientSecret = configService.get<string>('GITHUB_CLIENT_SECRET') ?? '';
     const callbackURL =
       configService.get<string>('GITHUB_CALLBACK_URL') ??
-      'http://localhost:3000/v1/auth/github/callback';
+      'http://localhost:4000/v1/auth/github/callback';
 
     if (!clientID || !clientSecret) {
       logger.warn(

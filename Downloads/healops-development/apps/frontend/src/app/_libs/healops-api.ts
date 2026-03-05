@@ -1,5 +1,5 @@
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+  process.env.NEXT_PUBLIC_BACKEND_URL || "/api";
 
 // ─── Token management ────────────────────────────────────────────────────────
 
@@ -94,6 +94,61 @@ export async function refreshTokenApi(refreshToken: string): Promise<TokenRespon
   });
   if (!res.ok) throw new Error("Token refresh failed");
   const body = (await res.json()) as ApiEnvelope<TokenResponse>;
+  return body.data;
+}
+
+// ─── Email Verification & Password Reset API ────────────────────────────────
+
+export async function verifyEmailApi(token: string): Promise<{ verified: boolean }> {
+  const res = await fetch(`${BACKEND_URL}/v1/auth/verify-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error((body as { message?: string } | null)?.message ?? "Verification failed");
+  }
+  const body = (await res.json()) as ApiEnvelope<{ verified: boolean }>;
+  return body.data;
+}
+
+export async function resendVerificationApi(email: string): Promise<{ sent: boolean }> {
+  const res = await fetch(`${BACKEND_URL}/v1/auth/resend-verification`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Failed to resend verification email");
+  const body = (await res.json()) as ApiEnvelope<{ sent: boolean }>;
+  return body.data;
+}
+
+export async function forgotPasswordApi(email: string): Promise<{ sent: boolean }> {
+  const res = await fetch(`${BACKEND_URL}/v1/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Failed to send reset email");
+  const body = (await res.json()) as ApiEnvelope<{ sent: boolean }>;
+  return body.data;
+}
+
+export async function resetPasswordApi(
+  token: string,
+  newPassword: string,
+): Promise<{ reset: boolean }> {
+  const res = await fetch(`${BACKEND_URL}/v1/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, newPassword }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error((body as { message?: string } | null)?.message ?? "Password reset failed");
+  }
+  const body = (await res.json()) as ApiEnvelope<{ reset: boolean }>;
   return body.data;
 }
 

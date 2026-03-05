@@ -87,9 +87,9 @@ resource "oci_core_instance" "healops" {
     ManagedBy   = "Terraform"
   }
 
-  # Prevent recreation on image updates
+  # Prevent recreation on image updates (user_data removed to allow cloud-init changes)
   lifecycle {
-    ignore_changes = [source_details[0].source_id, metadata["user_data"]]
+    ignore_changes = [source_details[0].source_id]
   }
 }
 

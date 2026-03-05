@@ -1,0 +1,34 @@
+groups:
+  - name: healops-agent-alerts
+    rules:
+      - alert: HealOpsJobQueueDepth
+        expr: bullmq_waiting_jobs{queue="healops-repair"} > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'HealOps repair queue depth high ({{ $value }} jobs)'
+
+      - alert: HealOpsEscalationRateHigh
+        expr: rate(healops_escalations_total[1h]) > 10
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'High escalation rate — agent failing to fix issues'
+
+      - alert: HealOpsBudgetNearExhaustion
+        expr: healops_monthly_tokens_used / healops_monthly_token_budget > 0.85
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Monthly token budget 85% consumed'
+
+      - alert: HealOpsAgentTimeout
+        expr: rate(healops_agent_timeout_total[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Agent jobs timing out — check waitForValidation node'

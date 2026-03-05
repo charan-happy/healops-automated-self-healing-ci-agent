@@ -8,6 +8,8 @@ import { TokenRepository } from './repositories/auth/token.repository';
 import { MfaRepository } from './repositories/auth/mfa.repository';
 import { ApiKeyRepository } from './repositories/auth/api-key.repository';
 import { OAuthRepository } from './repositories/auth/oauth.repository';
+import { VerificationTokenRepository } from './repositories/auth/verification-token.repository';
+import { PasswordResetTokenRepository } from './repositories/auth/password-reset-token.repository';
 import { UsersRepository } from './repositories/users/users.repository';
 import { MediaRepository } from './repositories/media/media.repository';
 import { NotificationsRepository } from './repositories/notifications/notifications.repository';
@@ -42,6 +44,8 @@ const repositories = [
   MfaRepository,
   ApiKeyRepository,
   OAuthRepository,
+  VerificationTokenRepository,
+  PasswordResetTokenRepository,
   UsersRepository,
   MediaRepository,
   NotificationsRepository,

@@ -8,6 +8,7 @@ import type { OnboardingData, OnboardingStep } from "@/app/_libs/types/onboardin
 import {
   createOrganization,
   configureCiProvider,
+  addScmProvider,
   selectRepositories,
   configureLlm,
   isDemoMode,
@@ -16,6 +17,7 @@ import { useOrg } from "@/app/_libs/context/OrgContext";
 import { trackEvent, POSTHOG_EVENTS } from "@/app/_libs/utils/analytics";
 import { StepOrganization } from "./steps/StepOrganization";
 import { StepCIProvider } from "./steps/StepCIProvider";
+import { StepSCMProvider } from "./steps/StepSCMProvider";
 import { StepRepositories } from "./steps/StepRepositories";
 import { StepAIConfig } from "./steps/StepAIConfig";
 import { StepReview } from "./steps/StepReview";
@@ -23,6 +25,7 @@ import { StepReview } from "./steps/StepReview";
 const STEPS: { key: OnboardingStep; label: string }[] = [
   { key: "create_organization", label: "Organization" },
   { key: "select_ci_provider", label: "CI Provider" },
+  { key: "select_scm_provider", label: "SCM Provider" },
   { key: "select_repositories", label: "Repositories" },
   { key: "configure_ai", label: "AI Config" },
   { key: "review_activate", label: "Review" },
@@ -32,11 +35,12 @@ const STEP_MAP: Record<string, number> = {
   create_organization: 0,
   configure_ci_provider: 1,
   select_ci_provider: 1,
-  select_repositories: 2,
-  configure_ai: 3,
-  configure_llm: 3,
-  review_activate: 4,
-  complete: 4,
+  select_scm_provider: 2,
+  select_repositories: 3,
+  configure_ai: 4,
+  configure_llm: 4,
+  review_activate: 5,
+  complete: 5,
 };
 
 export default function OnboardingWizard() {
@@ -107,6 +111,32 @@ export default function OnboardingWizard() {
               providerConfigId: configIds[i],
             }));
             setData((prev) => ({ ...prev, ciProviders: updatedProviders }));
+          }
+        }
+      }
+
+      if (step.key === "select_scm_provider") {
+        const scmProviders = data.scmProviders ?? [];
+        // SCM step is optional — user can skip if CI provider handles repos
+        if (!demo && scmProviders.length > 0) {
+          const configIds: string[] = [];
+          for (const provider of scmProviders) {
+            const result = await addScmProvider({
+              provider: provider.type,
+              ...provider.config,
+            });
+            if (!result) throw new Error(`Failed to configure ${provider.type} SCM`);
+            if (result.providerConfigId) {
+              configIds.push(result.providerConfigId);
+            }
+          }
+
+          if (configIds.length > 0) {
+            const updatedProviders = scmProviders.map((p, i) => ({
+              ...p,
+              providerConfigId: configIds[i],
+            }));
+            setData((prev) => ({ ...prev, scmProviders: updatedProviders }));
           }
         }
       }
@@ -225,12 +255,15 @@ export default function OnboardingWizard() {
               <StepCIProvider data={data} onUpdate={updateData} />
             )}
             {currentIndex === 2 && (
-              <StepRepositories data={data} onUpdate={updateData} />
+              <StepSCMProvider data={data} onUpdate={updateData} />
             )}
             {currentIndex === 3 && (
+              <StepRepositories data={data} onUpdate={updateData} />
+            )}
+            {currentIndex === 4 && (
               <StepAIConfig data={data} onUpdate={updateData} />
             )}
-            {currentIndex === 4 && <StepReview data={data} />}
+            {currentIndex === 5 && <StepReview data={data} />}
           </motion.div>
         </AnimatePresence>
       </div>

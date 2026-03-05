@@ -79,9 +79,11 @@ export function AppSidebar() {
   const { onboardingStatus, subscription } = useOrg();
   const { user, logout } = useAuth();
 
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
-  const baseHost = new URL(backendUrl).hostname;
-  const proto = new URL(backendUrl).protocol;
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "/api";
+  // Derive host for observability links — use window.location in browser, fallback for SSR
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const baseHost = typeof window !== "undefined" ? window.location.hostname : "localhost";
+  const proto = typeof window !== "undefined" ? window.location.protocol : "http:";
 
   const orgName =
     (onboardingStatus?.data?.organization as { name?: string } | undefined)
@@ -189,42 +191,31 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <Collapsible>
-          <SidebarGroup>
-            <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton>
-                  <Activity />
-                  <span>Observability</span>
-                  <ChevronsUpDown className="ml-auto size-4" />
-                </SidebarMenuButton>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <SidebarMenuSub>
-                  {[
-                    { title: "Prometheus", href: process.env.NEXT_PUBLIC_PROMETHEUS_URL || `${proto}//${baseHost}:9090`, icon: Activity, color: "text-orange-400" },
-                    { title: "Grafana", href: process.env.NEXT_PUBLIC_GRAFANA_URL || `${proto}//${baseHost}:3003`, icon: BarChart3, color: "text-emerald-400" },
-                    { title: "Jaeger", href: process.env.NEXT_PUBLIC_JAEGER_URL || `${proto}//${baseHost}:16686`, icon: Search, color: "text-sky-400" },
-                    { title: "BullMQ", href: `${backendUrl}/admin/queues`, icon: ListTodo, color: "text-violet-400" },
-                    { title: "Metrics", href: `${backendUrl}/metrics`, icon: Database, color: "text-amber-400" },
-                    { title: "Swagger", href: `${backendUrl}/api`, icon: FileCode, color: "text-cyan-400" },
-                    { title: "Dev Tools", href: `${backendUrl}/dev-tools`, icon: Wrench, color: "text-rose-400" },
-                  ].map((item) => (
-                    <SidebarMenuSubItem key={item.title}>
-                      <SidebarMenuSubButton asChild>
-                        <a href={item.href} target="_blank" rel="noopener noreferrer">
-                          <item.icon className={`size-3.5 ${item.color}`} />
-                          <span>{item.title}</span>
-                          <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
-                        </a>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ))}
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </SidebarMenuItem>
-          </SidebarGroup>
-        </Collapsible>
+        <SidebarGroup>
+          <SidebarGroupLabel>Observability</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {[
+                { title: "Grafana", href: process.env.NEXT_PUBLIC_GRAFANA_URL || `${proto}//grafana.healops.online`, icon: BarChart3, color: "text-emerald-400" },
+                { title: "Prometheus", href: process.env.NEXT_PUBLIC_PROMETHEUS_URL || `${proto}//prometheus.healops.online`, icon: Activity, color: "text-orange-400" },
+                { title: "Jaeger", href: process.env.NEXT_PUBLIC_JAEGER_URL || `${proto}//jaeger.healops.online`, icon: Search, color: "text-sky-400" },
+                { title: "BullMQ", href: `${proto}//bullmq.healops.online`, icon: ListTodo, color: "text-violet-400" },
+                { title: "Swagger", href: `${proto}//swagger.healops.online`, icon: FileCode, color: "text-cyan-400" },
+                { title: "Metrics", href: `${proto}//metrics.healops.online`, icon: Database, color: "text-amber-400" },
+              ].map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <a href={item.href} target="_blank" rel="noopener noreferrer">
+                      <item.icon className={`size-4 ${item.color}`} />
+                      <span>{item.title}</span>
+                      <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       <Separator className="bg-white/[0.06]" />

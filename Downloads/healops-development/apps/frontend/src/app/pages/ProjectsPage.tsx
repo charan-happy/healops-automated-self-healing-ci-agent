@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { FolderGit2, GitBranch, GitCommit, ArrowRight, Loader2, Search, ChevronDown, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../_components/PageTransition";
-import { fetchProjectsList, fetchProjectBranches } from "../_libs/healops-api";
+import { fetchProjectsList, fetchProjectBranches, isDemoMode } from "../_libs/healops-api";
 import type { ProjectResponse, BranchResponse } from "../_libs/healops-api";
 import { mockProjects, mockBranches } from "../_libs/mockData";
 import type { Project, Branch } from "../_libs/mockData";
@@ -56,8 +56,12 @@ const ProjectsPage = () => {
     fetchProjectsList()
       .then((data) => {
         if (!data || data.length === 0) {
-          setProjects(DEMO_PROJECTS);
-          setIsDemo(true);
+          if (isDemoMode()) {
+            setProjects(DEMO_PROJECTS);
+            setIsDemo(true);
+          } else {
+            setProjects([]);
+          }
           return;
         }
         const idMap: Record<string, string> = {};
@@ -77,8 +81,12 @@ const ProjectsPage = () => {
         setProjects(mapped);
       })
       .catch(() => {
-        setProjects(DEMO_PROJECTS);
-        setIsDemo(true);
+        if (isDemoMode()) {
+          setProjects(DEMO_PROJECTS);
+          setIsDemo(true);
+        } else {
+          setProjects([]);
+        }
       })
       .finally(() => setLoading(false));
   }, []);
@@ -120,9 +128,7 @@ const ProjectsPage = () => {
           setBranchesMap((prev) => ({ ...prev, [projectId]: [] }));
         }
       } catch {
-        // Fallback to demo branches
-        const demoBranches = DEMO_BRANCHES[projectId] ?? [];
-        setBranchesMap((prev) => ({ ...prev, [projectId]: demoBranches }));
+        setBranchesMap((prev) => ({ ...prev, [projectId]: [] }));
       } finally {
         setBranchLoading(null);
       }
@@ -280,8 +286,15 @@ const ProjectsPage = () => {
             </motion.div>
           );
         })}
-        {filtered.length === 0 && (
+        {filtered.length === 0 && search.trim() && (
           <p className="text-center text-muted-foreground py-8 text-sm">No projects matching &ldquo;{search}&rdquo;</p>
+        )}
+        {projects.length === 0 && !search.trim() && (
+          <div className="text-center py-16">
+            <FolderGit2 size={48} className="mx-auto text-muted-foreground/40 mb-4" />
+            <p className="text-lg font-semibold text-muted-foreground">No projects yet</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">Connect a CI or SCM provider in Settings to start monitoring your repositories.</p>
+          </div>
         )}
       </div>
     </PageTransition>

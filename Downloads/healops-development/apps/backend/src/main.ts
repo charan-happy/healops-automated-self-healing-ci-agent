@@ -95,36 +95,36 @@ async function bootstrap() {
     WebhooksModule,
   ];
 
-  if (!isProd) {
-    // V1 API docs at /api/v1
-    const v1Config = new DocumentBuilder()
-      .setTitle('Project/App Name APIs — v1')
-      .setDescription('API v1 documentation for the backend services of Project/App Name')
-      .setVersion('1.0')
-      .addBearerAuth()
-      .build();
-    const v1Document = SwaggerModule.createDocument(app, v1Config, {
-      include: V1_MODULES,
-    });
-    SwaggerModule.setup(`${RouteNames.API_DOCS}/v1`, app, v1Document);
+  // V1 API docs at /api/v1
+  const v1Config = new DocumentBuilder()
+    .setTitle('HealOps APIs — v1')
+    .setDescription('API v1 documentation for HealOps backend services')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const v1Document = SwaggerModule.createDocument(app, v1Config, {
+    include: V1_MODULES,
+  });
+  SwaggerModule.setup(`${RouteNames.API_DOCS}/v1`, app, v1Document);
 
-    // V2 API docs at /api/v2 (add new versioned modules here as they are created)
-    const V2_MODULES = [
-      UsersV2Module,
-    ];
+  // V2 API docs at /api/v2 (add new versioned modules here as they are created)
+  const V2_MODULES = [
+    UsersV2Module,
+  ];
 
-    const v2Config = new DocumentBuilder()
-      .setTitle('Project/App Name APIs — v2')
-      .setDescription('API v2 documentation for the backend services of Project/App Name')
-      .setVersion('2.0')
-      .addBearerAuth()
-      .build();
-    const v2Document = SwaggerModule.createDocument(app, v2Config, {
-      include: V2_MODULES,
-    });
-    SwaggerModule.setup(`${RouteNames.API_DOCS}/v2`, app, v2Document);
+  const v2Config = new DocumentBuilder()
+    .setTitle('HealOps APIs — v2')
+    .setDescription('API v2 documentation for HealOps backend services')
+    .setVersion('2.0')
+    .addBearerAuth()
+    .build();
+  const v2Document = SwaggerModule.createDocument(app, v2Config, {
+    include: V2_MODULES,
+  });
+  SwaggerModule.setup(`${RouteNames.API_DOCS}/v2`, app, v2Document);
 
-    // Default /api redirects to latest stable version
+  // Default /api redirects to latest stable version
+  {
     const expressInstance = app.getHttpAdapter().getInstance() as any;
     expressInstance.get(`/${RouteNames.API_DOCS}`, (_: any, res: Response) => {
       res.redirect(`/${RouteNames.API_DOCS}/v1`);

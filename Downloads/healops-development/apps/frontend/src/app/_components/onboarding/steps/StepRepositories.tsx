@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, FolderGit2, Check, Loader2, GitBranch } from "lucide-react";
-import type { OnboardingData, CiProviderEntry } from "@/app/_libs/types/onboarding";
+import { Search, FolderGit2, Check, Loader2, GitBranch, PlugZap } from "lucide-react";
+import type { OnboardingData, CiProviderEntry, ScmProviderEntry } from "@/app/_libs/types/onboarding";
 import { fetchRepos } from "@/app/_libs/github/github-service";
-import { fetchAvailableRepos } from "@/app/_libs/healops-api";
+import { fetchAvailableRepos, fetchScmAvailableRepos, isDemoMode } from "@/app/_libs/healops-api";
 import { PROVIDER_META } from "./StepCIProvider";
 
 interface Props {
@@ -37,17 +37,17 @@ export function StepRepositories({ data, onUpdate }: Props) {
   const selectedIds = new Set(selected.map((r) => r.externalRepoId));
 
   const providers: CiProviderEntry[] = data.ciProviders ?? (data.ciProvider ? [data.ciProvider] : []);
+  const scmProviders: ScmProviderEntry[] = data.scmProviders ?? [];
 
   useEffect(() => {
     async function loadRepos() {
       const allRepos: Repo[] = [];
       let anySuccess = false;
 
-      // Fetch repos from each configured provider
+      // Fetch repos from each configured CI provider
       for (const provider of providers) {
         try {
           if (provider.providerConfigId) {
-            // Use backend API to fetch repos from this specific provider config
             const result = await fetchAvailableRepos(provider.providerConfigId);
             if (result && result.length > 0) {
               allRepos.push(
@@ -85,8 +85,30 @@ export function StepRepositories({ data, onUpdate }: Props) {
         }
       }
 
-      if (!anySuccess) {
-        // Fall back to demo repos
+      // Also fetch repos from SCM providers
+      for (const scm of scmProviders) {
+        try {
+          if (scm.providerConfigId) {
+            const result = await fetchScmAvailableRepos(scm.providerConfigId);
+            if (result && result.repos.length > 0) {
+              allRepos.push(
+                ...result.repos.map((r) => ({
+                  externalRepoId: r.externalRepoId,
+                  name: r.name,
+                  defaultBranch: r.defaultBranch,
+                  provider: result.provider,
+                  providerConfigId: result.providerConfigId,
+                })),
+              );
+              anySuccess = true;
+            }
+          }
+        } catch {
+          // Continue to next provider
+        }
+      }
+
+      if (!anySuccess && isDemoMode()) {
         setRepos(FALLBACK_REPOS);
       } else {
         setRepos(allRepos);
@@ -153,6 +175,14 @@ export function StepRepositories({ data, onUpdate }: Props) {
             <span className="ml-2 text-sm text-muted-foreground">
               Loading repositories...
             </span>
+          </div>
+        ) : filtered.length === 0 && !search.trim() ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <PlugZap className="size-10 text-muted-foreground/40 mb-3" />
+            <p className="text-sm font-semibold text-muted-foreground">No repositories found</p>
+            <p className="mt-1 text-xs text-muted-foreground/70">
+              Go back and connect a CI or SCM provider to import your repositories.
+            </p>
           </div>
         ) : (
           groupedProviders.map((providerKey) => {

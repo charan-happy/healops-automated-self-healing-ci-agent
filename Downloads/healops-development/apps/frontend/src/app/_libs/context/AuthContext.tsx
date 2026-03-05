@@ -22,11 +22,13 @@ interface AuthUser {
   email: string;
   firstName: string;
   lastName: string;
+  isEmailVerified?: boolean;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  isEmailVerified: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (
@@ -45,7 +47,7 @@ const REFRESH_TOKEN_KEY = "healops_refresh_token";
 const USER_KEY = "healops_user";
 
 // Public routes that don't need auth
-const PUBLIC_PATHS = ["/", "/login", "/register", "/pricing", "/unauthorized", "/auth/callback", "/onboarding"];
+const PUBLIC_PATHS = ["/", "/login", "/register", "/pricing", "/unauthorized", "/auth/callback", "/onboarding", "/verify-email", "/forgot-password", "/reset-password"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
@@ -162,7 +164,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       const tokens = await loginApi(email, password);
-      handleTokens(tokens, { email, firstName: "", lastName: "" });
+      const isEmailVerified = (tokens as TokenResponse & { isEmailVerified?: boolean }).isEmailVerified ?? false;
+      handleTokens(tokens, { email, firstName: "", lastName: "", isEmailVerified });
     },
     [handleTokens],
   );
@@ -204,6 +207,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       isAuthenticated: !!user,
+      isEmailVerified: user?.isEmailVerified ?? false,
       loading,
       login,
       register,

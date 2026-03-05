@@ -43,6 +43,7 @@ export default function BillingPage() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [billingError, setBillingError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -81,6 +82,13 @@ export default function BillingPage() {
           </span>
         )}
       </div>
+
+      {billingError && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-300">
+          {billingError}
+          <button onClick={() => setBillingError(null)} className="ml-3 text-xs text-amber-400 hover:underline">Dismiss</button>
+        </div>
+      )}
 
       {/* Current plan & usage */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -173,6 +181,8 @@ export default function BillingPage() {
                     );
                     if (result?.url) {
                       window.location.href = result.url;
+                    } else {
+                      setBillingError("Billing is not configured yet. Please set up Stripe credentials.");
                     }
                   }}
                   className={`mt-5 w-full rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
@@ -205,6 +215,8 @@ export default function BillingPage() {
               );
               if (result?.url) {
                 window.location.href = result.url;
+              } else {
+                setBillingError("Billing is not configured yet. Please set up Stripe credentials.");
               }
             }}
             className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-white/5"

@@ -94,11 +94,12 @@ export default function DashboardPage() {
         if (ci) setCiProviders(ci);
         if (scm) setScmProviders(scm);
 
-        // Use API data if available, otherwise fall back to demo data
-        setMetrics(m ?? DEMO_METRICS);
-        setRecentJobs(jobs ?? DEMO_JOBS);
-        setTrendData(trends ?? generateTrendData(30));
-        setRepoHealth(DEMO_REPOS);
+        // Use API data if available; only fall back to demo data in demo mode
+        const demo = isDemoMode();
+        setMetrics(m ?? (demo ? DEMO_METRICS : null));
+        setRecentJobs(jobs ?? (demo ? DEMO_JOBS : []));
+        setTrendData(trends ?? (demo ? generateTrendData(30) : []));
+        setRepoHealth(demo ? DEMO_REPOS : []);
 
         // Derive repo health from real jobs if available
         if (jobs && jobs.length > 0) {
@@ -139,7 +140,7 @@ export default function DashboardPage() {
     const periodDays = period === "7d" ? 7 : period === "90d" ? 90 : 30;
     setTrendData(null);
     const trends = await fetchTrendData(period);
-    setTrendData(trends ?? generateTrendData(periodDays));
+    setTrendData(trends ?? (isDemoMode() ? generateTrendData(periodDays) : []));
   }, []);
 
   if (error) {

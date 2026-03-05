@@ -15,6 +15,7 @@ export class AuthRepository {
     email: string;
     passwordHash: string | null;
     isActive: boolean;
+    isEmailVerified: boolean;
   } | null> {
     const rows = await this.dbService.db
       .select({
@@ -22,6 +23,7 @@ export class AuthRepository {
         email: schema.users.email,
         passwordHash: schema.users.passwordHash,
         isActive: schema.users.isActive,
+        isEmailVerified: schema.users.isEmailVerified,
       })
       .from(schema.users)
       .where(eq(schema.users.email, email))
@@ -131,5 +133,15 @@ export class AuthRepository {
       .limit(1);
 
     return rows[0] ?? null;
+  }
+
+  async updateEmailVerified(userId: string, isVerified: boolean): Promise<void> {
+    await this.dbService.db
+      .update(schema.users)
+      .set({
+        isEmailVerified: isVerified,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.users.id, userId));
   }
 }

@@ -6,6 +6,7 @@ import {
   FolderGit2,
   Bot,
   CheckCircle2,
+  Code2,
 } from "lucide-react";
 import type { OnboardingData } from "@/app/_libs/types/onboarding";
 
@@ -26,10 +27,19 @@ export function StepReview({ data }: Props) {
     {
       icon: GitBranch,
       title: "CI Provider",
-      value: data.ciProvider?.type
-        ? data.ciProvider.type.charAt(0).toUpperCase() +
-          data.ciProvider.type.slice(1)
-        : "Not selected",
+      value: data.ciProviders?.length
+        ? data.ciProviders.map((p) => p.type.charAt(0).toUpperCase() + p.type.slice(1)).join(", ")
+        : data.ciProvider?.type
+          ? data.ciProvider.type.charAt(0).toUpperCase() + data.ciProvider.type.slice(1)
+          : "Not selected",
+      detail: null,
+    },
+    {
+      icon: Code2,
+      title: "SCM Provider",
+      value: data.scmProviders?.length
+        ? data.scmProviders.map((p) => p.type.charAt(0).toUpperCase() + p.type.slice(1)).join(", ")
+        : "Skipped",
       detail: null,
     },
     {
@@ -86,7 +96,8 @@ export function StepReview({ data }: Props) {
               </div>
               {s.value !== "Not configured" &&
                 s.value !== "Not selected" &&
-                s.value !== "None selected" && (
+                s.value !== "None selected" &&
+                s.value !== "Skipped" && (
                   <CheckCircle2 className="mt-0.5 size-4 text-emerald-400" />
                 )}
             </div>

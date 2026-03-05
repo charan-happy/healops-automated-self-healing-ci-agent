@@ -16,16 +16,16 @@ resource "oci_core_security_list" "main" {
     description = "Allow all outbound traffic"
   }
 
-  # ── Ingress: SSH ──────────────────────────────────────────────────────────
+  # ── Ingress: SSH (custom port 10023) ──────────────────────────────────────
   ingress_security_rules {
     source    = var.ssh_allowed_cidr
     protocol  = "6" # TCP
     stateless = false
-    description = "SSH access"
+    description = "SSH access (port 10023)"
 
     tcp_options {
-      min = 22
-      max = 22
+      min = 10023
+      max = 10023
     }
   }
 

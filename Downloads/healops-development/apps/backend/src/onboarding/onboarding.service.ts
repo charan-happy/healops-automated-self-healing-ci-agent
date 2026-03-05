@@ -182,6 +182,15 @@ export class OnboardingService {
       }
     }
 
+    // Deactivate any existing active config of the same type (makes onboarding idempotent)
+    const existing = await this.ciProviderConfigsRepository.findActiveConfigByOrgAndType(
+      organizationId,
+      data.provider,
+    );
+    if (existing) {
+      await this.ciProviderConfigsRepository.deactivateConfig(existing.id);
+    }
+
     // Create the CI provider config
     const providerConfig = await this.ciProviderConfigsRepository.createConfig({
       organizationId,

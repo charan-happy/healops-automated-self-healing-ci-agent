@@ -23,6 +23,9 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MfaVerifyDto } from './dto/mfa-verify.dto';
 import { AuthUser } from './interfaces/auth-user.interface';
 import { TokenResponse } from './interfaces/token-response.interface';
@@ -70,7 +73,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Authenticate with email and password' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Login successful' })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Invalid credentials' })
-  async login(@Body() dto: LoginDto): Promise<TokenResponse> {
+  async login(@Body() dto: LoginDto): Promise<TokenResponse & { isEmailVerified: boolean }> {
     return this.authService.login(dto);
   }
 
@@ -111,6 +114,52 @@ export class AuthController {
   ): Promise<{ message: string }> {
     await this.authService.changePassword(user.id, dto);
     return { message: 'Password changed successfully' };
+  }
+
+  // ─── Email Verification ──────────────────────────────────────────────────
+
+  @Post('verify-email')
+  @Public()
+  @Throttle({ short: { limit: 10, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify email address using token from verification email' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Email verified successfully' })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Invalid or expired token' })
+  async verifyEmail(@Body() dto: VerifyEmailDto): Promise<{ verified: boolean }> {
+    return this.authService.verifyEmail(dto.token);
+  }
+
+  @Post('resend-verification')
+  @Public()
+  @Throttle({ short: { limit: 3, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend email verification link' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Verification email sent if account exists' })
+  async resendVerification(@Body() body: { email: string }): Promise<{ sent: boolean }> {
+    return this.authService.resendVerification(body.email);
+  }
+
+  // ─── Forgot / Reset Password ────────────────────────────────────────────
+
+  @Post('forgot-password')
+  @Public()
+  @Throttle({ short: { limit: 5, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request a password reset email' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Reset email sent if account exists' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ sent: boolean }> {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Post('reset-password')
+  @Public()
+  @Throttle({ short: { limit: 5, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password using token from reset email' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Password reset successfully' })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Invalid or expired token' })
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ reset: boolean }> {
+    return this.authService.resetPassword(dto.token, dto.newPassword);
   }
 
   // ─── Google OAuth ─────────────────────────────────────────────────────────

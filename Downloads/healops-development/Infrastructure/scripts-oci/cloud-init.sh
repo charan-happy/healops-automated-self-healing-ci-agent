@@ -40,10 +40,18 @@ su - ubuntu -c '
   echo "eval \"\$(fnm env)\"" >> ~/.bashrc
 '
 
+# ── SSH Hardening (port 10023, key-only, no root) ─────────────────────────
+echo "▶ Hardening SSH..."
+sed -i 's/^#\?Port .*/Port 10023/' /etc/ssh/sshd_config
+sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin no/' /etc/ssh/sshd_config
+sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
+systemctl restart ssh
+
 # ── OCI Firewall (iptables) ────────────────────────────────────────────────
 # OCI Security Lists control network access, but the OS firewall also blocks.
 # We must open ports in iptables too (unlike AWS where SG is sufficient).
 echo "▶ Opening firewall ports..."
+iptables -I INPUT 6 -m state --state NEW -p tcp --dport 10023 -j ACCEPT
 iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
 iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
 iptables -I INPUT 6 -m state --state NEW -p tcp --dport 3000 -j ACCEPT
@@ -52,7 +60,20 @@ iptables -I INPUT 6 -m state --state NEW -p tcp --dport 4000 -j ACCEPT
 iptables -I INPUT 6 -m state --state NEW -p tcp --dport 9090 -j ACCEPT
 iptables -I INPUT 6 -m state --state NEW -p tcp --dport 16686 -j ACCEPT
 
+# ── Security: fail2ban + auto-updates ─────────────────────────────────────
+apt-get install -y fail2ban unattended-upgrades
+cat > /etc/fail2ban/jail.local << 'F2BEOF'
+[sshd]
+enabled = true
+port = 10023
+maxretry = 5
+bantime = 3600
+F2BEOF
+systemctl enable fail2ban && systemctl restart fail2ban
+dpkg-reconfigure -plow unattended-upgrades || true
+
 # Persist iptables rules across reboots
+apt-get install -y iptables-persistent
 netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
 
 # ── App directory ───────────────────────────────────────────────────────────
