@@ -1,0 +1,49 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# HealOps — Observability Stack (Prometheus + Grafana + Jaeger)
+# Usage: docker compose -f deploy/docker-compose.observability.yml up -d
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: healops-prometheus
+    restart: unless-stopped
+    ports:
+      - '9090:9090'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      - ../apps/backend/apm/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: healops-grafana
+    restart: unless-stopped
+    ports:
+      - '3001:3000'
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: http://140.245.212.96:3001
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../apps/backend/apm/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    container_name: healops-jaeger
+    restart: unless-stopped
+    ports:
+      - '16686:16686'
+      - '4318:4318'
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

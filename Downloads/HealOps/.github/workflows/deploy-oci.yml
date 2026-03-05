@@ -1,0 +1,98 @@
+name: Deploy to OCI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'Infrastructure/**'
+      - '*.md'
+      - '.github/workflows/terraform.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-oci
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to OCI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rsync code to server
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avz --delete --exclude='node_modules' --exclude='.next' --exclude='dist' --exclude='.git' --exclude='.env' --exclude='*.pem' --exclude='.turbo'
+          path: ./
+          remote_path: /home/ubuntu/healops/
+          remote_host: ${{ secrets.OCI_HOST }}
+          remote_port: 10023
+          remote_user: ubuntu
+          remote_key: ${{ secrets.OCI_SSH_KEY }}
+
+      - name: Build and restart
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ubuntu
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: 10023
+          command_timeout: 15m
+          script: |
+            set -e
+            export FNM_PATH="$HOME/.local/share/fnm"
+            export PATH="$FNM_PATH:$PATH"
+            eval "$(fnm env)"
+
+            echo "▶ Backend: install + build..."
+            cd ~/healops/apps/backend
+            pnpm install --frozen-lockfile
+            pnpm build
+            npx tsc-alias -p tsconfig.json
+
+            echo "▶ Backend: migrations..."
+            pnpm db:migrate
+
+            echo "▶ Frontend: install + build..."
+            cd ~/healops/apps/frontend
+            pnpm install --frozen-lockfile
+            NEXT_PUBLIC_BACKEND_URL="/api" \
+            NEXT_PUBLIC_GRAFANA_URL="http://${{ secrets.OCI_HOST }}:3001" \
+            NEXT_PUBLIC_PROMETHEUS_URL="http://${{ secrets.OCI_HOST }}:9090" \
+            NEXT_PUBLIC_JAEGER_URL="http://${{ secrets.OCI_HOST }}:16686" \
+            NODE_OPTIONS="--max-old-space-size=4096" pnpm build
+
+            echo "▶ Restarting PM2..."
+            cd ~/healops
+            pm2 restart healops-backend healops-worker healops-frontend
+
+            echo "▶ Health check..."
+            sleep 8
+            curl -sf http://127.0.0.1:4000/health | grep -q '"status":"up"' && \
+              echo "✅ Deploy successful — ${{ github.sha }}" || \
+              { echo "❌ Health check failed"; pm2 logs --nostream --lines 20; exit 1; }
+
+      - name: Notify Slack (Success)
+        if: success() && vars.SLACK_ENABLED == 'true'
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "✅ *OCI Deploy Success*\nCommit: `${{ github.sha }}` by ${{ github.actor }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+            }
+
+      - name: Notify Slack (Failure)
+        if: failure() && vars.SLACK_ENABLED == 'true'
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "❌ *OCI Deploy Failed*\nCommit: `${{ github.sha }}` by ${{ github.actor }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+            }
