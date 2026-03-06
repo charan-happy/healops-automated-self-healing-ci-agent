@@ -70,6 +70,20 @@ export interface ProviderRepository {
   url: string;
 }
 
+/** Result of listing recent pipeline/workflow runs */
+export interface ProviderPipelineRun {
+  externalRunId: string;
+  workflowName: string | null;
+  status: 'success' | 'failed' | 'running' | 'cancelled' | 'pending' | 'unknown';
+  branch: string;
+  commitSha: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  duration: number | null;
+  url: string | null;
+  provider: string;
+}
+
 /** Result of creating a pull request / merge request */
 export interface CreatePrResult {
   number: number;

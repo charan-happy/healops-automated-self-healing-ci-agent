@@ -348,12 +348,23 @@ export class OnboardingService {
     const completedSteps = (progress.completedSteps as string[]) ?? [];
     const isComplete = progress.completedAt !== null;
 
+    // Enrich with organization details so the frontend can display the org name
+    const org = await this.platformRepository.findOrganizationById(organizationId);
+    const rawData = (progress.data as Record<string, unknown>) ?? {};
+
     return {
       currentStep: progress.currentStep,
       completedSteps,
       isComplete,
       completedAt: progress.completedAt,
-      data: progress.data,
+      // NOTE: 'organization' is top-level to avoid collision with TransformInterceptor's
+      // `data: data?.data || data` logic which would strip the outer wrapper if we used 'data'.
+      organization: {
+        id: organizationId,
+        name: org?.name ?? 'My Org',
+        slug: org?.slug ?? '',
+      },
+      config: rawData,
     };
   }
 

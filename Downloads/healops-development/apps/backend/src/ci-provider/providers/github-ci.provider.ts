@@ -13,6 +13,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderPipelineRun,
   ProviderRepository,
   WebhookPayloadResult,
 } from '../interfaces/ci-provider.interface';
@@ -362,6 +363,55 @@ export class GitHubCiProvider extends CiProviderBase {
       );
       return null;
     }
+  }
+
+  // ─── Pipeline Discovery ─────────────────────────────────────────────────
+
+  override async listRecentPipelineRuns(
+    config: CiConnectionConfig,
+    _repoFullName: string,
+    limit: number,
+  ): Promise<ProviderPipelineRun[]> {
+    const client = this.buildClient(config);
+    try {
+      const response = await client.get(
+        `/repos/${config.owner}/${config.repo}/actions/runs`,
+        { params: { per_page: limit } },
+      );
+      const runs = (response.data?.['workflow_runs'] ?? []) as Record<string, unknown>[];
+      return runs.map((run) => {
+        const conclusion = String(run['conclusion'] ?? '');
+        const status = String(run['status'] ?? '');
+        const startedAt = run['run_started_at'] ? String(run['run_started_at']) : null;
+        const completedAt = run['updated_at'] ? String(run['updated_at']) : null;
+        const durationMs = startedAt && completedAt
+          ? new Date(completedAt).getTime() - new Date(startedAt).getTime()
+          : null;
+        return {
+          externalRunId: String(run['id'] ?? ''),
+          workflowName: run['name'] ? String(run['name']) : null,
+          status: this.mapGitHubStatus(status, conclusion),
+          branch: String(run['head_branch'] ?? ''),
+          commitSha: String(run['head_sha'] ?? ''),
+          startedAt,
+          completedAt,
+          duration: durationMs !== null ? Math.round(durationMs / 1000) : null,
+          url: run['html_url'] ? String(run['html_url']) : null,
+          provider: 'github',
+        };
+      });
+    } catch (error) {
+      this.logger.error(`Failed to list pipeline runs: ${(error as Error).message}`);
+      return [];
+    }
+  }
+
+  private mapGitHubStatus(status: string, conclusion: string): ProviderPipelineRun['status'] {
+    if (status === 'in_progress' || status === 'queued') return 'running';
+    if (conclusion === 'success') return 'success';
+    if (conclusion === 'failure') return 'failed';
+    if (conclusion === 'cancelled') return 'cancelled';
+    return 'unknown';
   }
 
   // ─── SCM Operations ───────────────────────────────────────────────────────

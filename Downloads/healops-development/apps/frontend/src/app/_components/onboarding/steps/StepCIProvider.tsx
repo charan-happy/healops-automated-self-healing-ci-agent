@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Check } from "lucide-react";
+import { ExternalLink, Check, Info } from "lucide-react";
 import type { OnboardingData, CiProviderType, CiProviderEntry } from "@/app/_libs/types/onboarding";
 
 interface Props {
@@ -94,14 +94,14 @@ export function StepCIProvider({ data, onUpdate }: Props) {
               className={`flex items-start gap-3 rounded-lg border p-4 text-left transition-all ${
                 isSelected
                   ? "border-brand-cyan bg-brand-cyan/5"
-                  : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                  : "border-border/30 bg-card/50 hover:border-border/50"
               }`}
             >
               <div
                 className={`flex size-5 shrink-0 items-center justify-center rounded border mt-0.5 transition-all ${
                   isSelected
                     ? "border-brand-cyan bg-brand-cyan"
-                    : "border-white/20"
+                    : "border-border/50"
                 }`}
               >
                 {isSelected && <Check className="size-3 text-black" />}
@@ -123,25 +123,55 @@ export function StepCIProvider({ data, onUpdate }: Props) {
           </p>
 
           {entry.type === "github" && (
-            <div className="rounded-lg border border-brand-cyan/20 bg-brand-cyan/5 p-4">
-              <p className="text-sm">
-                Click the button below to install the HealOps GitHub App on your
-                organization.
-              </p>
-              <a
-                href={`https://github.com/apps/healops-dev/installations/new`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-brand-cyan px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-brand-cyan/90"
-              >
-                Install GitHub App
-                <ExternalLink className="size-3.5" />
-              </a>
+            <div className="space-y-3">
+              <div className="rounded-lg border border-brand-cyan/20 bg-brand-cyan/5 p-4">
+                <p className="text-sm">
+                  Click the button below to install the HealOps GitHub App on your
+                  organization.
+                </p>
+                <a
+                  href={`https://github.com/apps/healops-dev/installations/new`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-brand-cyan px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-brand-cyan/90"
+                >
+                  Install GitHub App
+                  <ExternalLink className="size-3.5" />
+                </a>
+              </div>
+              <div className="rounded-lg border border-border/30 bg-card/50 p-4">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                  <Info className="size-3.5 text-brand-cyan" />
+                  How it works:
+                </div>
+                <ol className="ml-5 list-decimal space-y-1 text-xs text-muted-foreground">
+                  <li>Click &quot;Install GitHub App&quot; above</li>
+                  <li>Select your organization or personal account</li>
+                  <li>Choose which repositories to grant access to</li>
+                  <li>Click <strong>Install</strong> — HealOps will automatically monitor GitHub Actions workflows</li>
+                  <li>When a workflow fails, HealOps detects it and begins autonomous repair</li>
+                </ol>
+              </div>
             </div>
           )}
 
           {entry.type === "gitlab" && (
             <div className="space-y-3">
+              <div className="rounded-lg border border-border/30 bg-card/50 p-4">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                  <Info className="size-3.5 text-brand-cyan" />
+                  How to get your GitLab Access Token:
+                </div>
+                <ol className="ml-5 list-decimal space-y-1 text-xs text-muted-foreground">
+                  <li>Go to your GitLab instance (<strong>gitlab.com</strong> or self-hosted)</li>
+                  <li>Navigate to <strong>Profile → Access Tokens</strong> (or visit <code className="rounded bg-muted/50 px-1">gitlab.com/-/user_settings/personal_access_tokens</code>)</li>
+                  <li>Click <strong>Add new token</strong></li>
+                  <li>Give it a name (e.g. &quot;HealOps&quot;) and set an expiry date</li>
+                  <li>Select scopes: <code className="rounded bg-muted/50 px-1">read_api</code> and <code className="rounded bg-muted/50 px-1">read_repository</code></li>
+                  <li>Click <strong>Create personal access token</strong></li>
+                  <li>Copy the token (starts with <code className="rounded bg-muted/50 px-1">glpat-</code>) and paste below</li>
+                </ol>
+              </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">
                   GitLab Server URL
@@ -151,7 +181,7 @@ export function StepCIProvider({ data, onUpdate }: Props) {
                   value={getConfig("gitlab").serverUrl ?? ""}
                   onChange={(e) => setConfig("gitlab", "serverUrl", e.target.value)}
                   placeholder="https://gitlab.com"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
+                  className="w-full rounded-lg border border-border/30 bg-card/50 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
                 />
               </div>
               <div>
@@ -163,7 +193,7 @@ export function StepCIProvider({ data, onUpdate }: Props) {
                   value={getConfig("gitlab").accessToken ?? ""}
                   onChange={(e) => setConfig("gitlab", "accessToken", e.target.value)}
                   placeholder="glpat-xxxxxxxxxxxx"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
+                  className="w-full rounded-lg border border-border/30 bg-card/50 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
                 />
               </div>
             </div>
@@ -171,6 +201,21 @@ export function StepCIProvider({ data, onUpdate }: Props) {
 
           {entry.type === "bitbucket" && (
             <div className="space-y-3">
+              <div className="rounded-lg border border-border/30 bg-card/50 p-4">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                  <Info className="size-3.5 text-brand-cyan" />
+                  How to create a Bitbucket App Password:
+                </div>
+                <ol className="ml-5 list-decimal space-y-1 text-xs text-muted-foreground">
+                  <li>Go to <strong>bitbucket.org</strong> and log in</li>
+                  <li>Click your avatar → <strong>Personal settings</strong></li>
+                  <li>Under &quot;Access management&quot;, click <strong>App passwords</strong></li>
+                  <li>Click <strong>Create app password</strong></li>
+                  <li>Give it a label (e.g. &quot;HealOps&quot;)</li>
+                  <li>Select permissions: <code className="rounded bg-muted/50 px-1">Repositories: Read</code>, <code className="rounded bg-muted/50 px-1">Pull requests: Write</code>, <code className="rounded bg-muted/50 px-1">Pipelines: Read</code></li>
+                  <li>Click <strong>Create</strong> and copy the generated password</li>
+                </ol>
+              </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">
                   Workspace
@@ -180,7 +225,7 @@ export function StepCIProvider({ data, onUpdate }: Props) {
                   value={getConfig("bitbucket").workspace ?? ""}
                   onChange={(e) => setConfig("bitbucket", "workspace", e.target.value)}
                   placeholder="my-workspace"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
+                  className="w-full rounded-lg border border-border/30 bg-card/50 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
                 />
               </div>
               <div>
@@ -192,7 +237,7 @@ export function StepCIProvider({ data, onUpdate }: Props) {
                   value={getConfig("bitbucket").appPassword ?? ""}
                   onChange={(e) => setConfig("bitbucket", "appPassword", e.target.value)}
                   placeholder="ATBBxxxxxxxx"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
+                  className="w-full rounded-lg border border-border/30 bg-card/50 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
                 />
               </div>
             </div>
@@ -200,6 +245,20 @@ export function StepCIProvider({ data, onUpdate }: Props) {
 
           {entry.type === "jenkins" && (
             <div className="space-y-3">
+              <div className="rounded-lg border border-border/30 bg-card/50 p-4">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                  <Info className="size-3.5 text-brand-cyan" />
+                  How to get your Jenkins API Token:
+                </div>
+                <ol className="ml-5 list-decimal space-y-1 text-xs text-muted-foreground">
+                  <li>Log in to your Jenkins instance</li>
+                  <li>Click your username (top-right) → <strong>Configure</strong></li>
+                  <li>Scroll to <strong>API Token</strong> section</li>
+                  <li>Click <strong>Add new Token</strong>, give it a name (e.g. &quot;HealOps&quot;)</li>
+                  <li>Click <strong>Generate</strong> and copy the token</li>
+                  <li>Paste the token below along with your Jenkins username</li>
+                </ol>
+              </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">
                   Jenkins Server URL
@@ -209,7 +268,7 @@ export function StepCIProvider({ data, onUpdate }: Props) {
                   value={getConfig("jenkins").serverUrl ?? ""}
                   onChange={(e) => setConfig("jenkins", "serverUrl", e.target.value)}
                   placeholder="https://jenkins.example.com"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
+                  className="w-full rounded-lg border border-border/30 bg-card/50 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
                 />
               </div>
               <div>
@@ -221,7 +280,7 @@ export function StepCIProvider({ data, onUpdate }: Props) {
                   value={getConfig("jenkins").apiToken ?? ""}
                   onChange={(e) => setConfig("jenkins", "apiToken", e.target.value)}
                   placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
+                  className="w-full rounded-lg border border-border/30 bg-card/50 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
                 />
               </div>
               <div>
@@ -233,7 +292,7 @@ export function StepCIProvider({ data, onUpdate }: Props) {
                   value={getConfig("jenkins").username ?? ""}
                   onChange={(e) => setConfig("jenkins", "username", e.target.value)}
                   placeholder="admin"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
+                  className="w-full rounded-lg border border-border/30 bg-card/50 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
                 />
               </div>
               <div>
@@ -252,7 +311,7 @@ export function StepCIProvider({ data, onUpdate }: Props) {
                       className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
                         (getConfig("jenkins").scmProvider || "github") === scm
                           ? "border-brand-cyan bg-brand-cyan/10 text-brand-cyan"
-                          : "border-white/10 text-muted-foreground hover:border-white/20"
+                          : "border-border/30 text-muted-foreground hover:border-border/50"
                       }`}
                     >
                       {scm === "github" ? "GitHub" : scm === "gitlab" ? "GitLab" : "Bitbucket"}

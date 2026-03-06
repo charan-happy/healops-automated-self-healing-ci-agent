@@ -6,6 +6,7 @@ import { DBService } from '@db/db.service';
 import {
   organizations,
   repositories,
+  repositoryCiLinks,
   repositorySettings,
   branches,
   commits,
@@ -27,10 +28,19 @@ export class PlatformRepository {
     return row ?? null;
   }
 
+  async findOrganizationBySlug(slug: string) {
+    const [row] = await this.dbService.db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.slug, slug));
+    return row ?? null;
+  }
+
   /**
    * Find or create an organization by name.
    * Handles concurrent webhook race conditions by catching unique violations
-   * and falling back to a lookup.
+   * and falling back to a lookup. Also handles slug collisions by appending
+   * a numeric suffix when the generated slug already exists.
    */
   async createOrganization(data: typeof organizations.$inferInsert) {
     // Check if org already exists by name
@@ -39,6 +49,29 @@ export class PlatformRepository {
       .from(organizations)
       .where(eq(organizations.name, data.name));
     if (existing) return existing;
+
+    // Check by slug to avoid unique constraint violation on idx_organizations_slug
+    if (data.slug) {
+      const [existingBySlug] = await this.dbService.db
+        .select()
+        .from(organizations)
+        .where(eq(organizations.slug, data.slug));
+      if (existingBySlug) {
+        // Slug collision with a different name: append numeric suffix
+        let suffix = 2;
+        let uniqueSlug = `${data.slug}-${String(suffix)}`;
+        while (true) {
+          const [conflict] = await this.dbService.db
+            .select()
+            .from(organizations)
+            .where(eq(organizations.slug, uniqueSlug));
+          if (!conflict) break;
+          suffix++;
+          uniqueSlug = `${data.slug}-${String(suffix)}`;
+        }
+        data = { ...data, slug: uniqueSlug };
+      }
+    }
 
     try {
       const [row] = await this.dbService.db
@@ -49,12 +82,21 @@ export class PlatformRepository {
       return row;
     } catch {
       // Race condition: another request created it between our check and insert
-      const [fallback] = await this.dbService.db
+      const [fallbackByName] = await this.dbService.db
         .select()
         .from(organizations)
         .where(eq(organizations.name, data.name));
-      if (!fallback) throw new Error('Failed to create or find organization');
-      return fallback;
+      if (fallbackByName) return fallbackByName;
+
+      // Also try finding by slug in case the name differs slightly
+      if (data.slug) {
+        const [fallbackBySlug] = await this.dbService.db
+          .select()
+          .from(organizations)
+          .where(eq(organizations.slug, data.slug));
+        if (fallbackBySlug) return fallbackBySlug;
+      }
+      throw new Error('Failed to create or find organization');
     }
   }
 
@@ -427,5 +469,61 @@ export class PlatformRepository {
       .innerJoin(repositories, eq(branches.repositoryId, repositories.id))
       .where(eq(commits.commitSha, commitSha))
       .orderBy(desc(pipelineRuns.createdAt));
+  }
+
+  // ─── Repository CI Links ────────────────────────────────────────────────
+
+  async findCiLinksByRepository(repositoryId: string) {
+    return this.dbService.db
+      .select()
+      .from(repositoryCiLinks)
+      .where(
+        and(
+          eq(repositoryCiLinks.repositoryId, repositoryId),
+          eq(repositoryCiLinks.isActive, true),
+        ),
+      );
+  }
+
+  async createCiLink(data: {
+    repositoryId: string;
+    ciProviderConfigId: string;
+    pipelineName?: string | undefined;
+  }) {
+    const [row] = await this.dbService.db
+      .insert(repositoryCiLinks)
+      .values({
+        repositoryId: data.repositoryId,
+        ciProviderConfigId: data.ciProviderConfigId,
+        pipelineName: data.pipelineName ?? null,
+      })
+      .onConflictDoNothing()
+      .returning();
+    return row ?? null;
+  }
+
+  async updateCiLink(
+    id: string,
+    data: { pipelineName?: string | null; isActive?: boolean },
+  ) {
+    const setData: Record<string, unknown> = {};
+    if (data.pipelineName !== undefined) setData['pipelineName'] = data.pipelineName;
+    if (data.isActive !== undefined) setData['isActive'] = data.isActive;
+    if (Object.keys(setData).length === 0) return null;
+
+    const [row] = await this.dbService.db
+      .update(repositoryCiLinks)
+      .set(setData)
+      .where(eq(repositoryCiLinks.id, id))
+      .returning();
+    return row ?? null;
+  }
+
+  async removeCiLink(id: string) {
+    const [row] = await this.dbService.db
+      .delete(repositoryCiLinks)
+      .where(eq(repositoryCiLinks.id, id))
+      .returning();
+    return row ?? null;
   }
 }

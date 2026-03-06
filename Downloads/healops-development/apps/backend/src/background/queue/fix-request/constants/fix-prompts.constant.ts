@@ -42,6 +42,7 @@ const LANGUAGE_CONTEXT: Record<string, string> = {
   go: 'Language: Go. All imports and variables must be used. Error handling: check err != nil.',
   java: 'Language: Java. Strong static typing. Spring Boot / Maven / Gradle.',
   rust: 'Language: Rust. Ownership/borrowing rules. Use Result<T,E> not unwrap().',
+  ruby: 'Language: Ruby 3.x. Rails conventions. Use `raise` not `throw`. Indentation: 2 spaces. Prefer symbols over strings for hash keys.',
 };
 
 // ─── Layer 1: Role + Output Rules ────────────────────────────────────────────

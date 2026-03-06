@@ -12,6 +12,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderPipelineRun,
   ProviderRepository,
   WebhookPayloadResult,
 } from '../interfaces/ci-provider.interface';
@@ -215,6 +216,94 @@ export class JenkinsCiProvider extends CiProviderBase {
         `Failed to fetch Jenkins logs for ${externalRunId}: ${(error as Error).message}`,
       );
       return null;
+    }
+  }
+
+  // ─── Pipeline Discovery ──────────────────────────────────────────────────
+
+  override async listRecentPipelineRuns(
+    config: CiConnectionConfig,
+    repoFullName: string,
+    limit: number,
+  ): Promise<ProviderPipelineRun[]> {
+    const client = this.buildClient(config);
+    // repoFullName is the Jenkins job name
+    const jobName = repoFullName.split('/').pop() ?? repoFullName;
+
+    try {
+      const response = await client.get(
+        `/job/${encodeURIComponent(jobName)}/api/json`,
+        {
+          params: {
+            tree: `builds[number,result,timestamp,duration,url,actions[lastBuiltRevision[SHA1,branch[name]]]]`,
+          },
+        },
+      );
+
+      const data = response.data as Record<string, unknown>;
+      const builds = (data['builds'] as Record<string, unknown>[]) ?? [];
+
+      return builds.slice(0, limit).map((build) => {
+        const actions = (build['actions'] as Record<string, unknown>[]) ?? [];
+        // Extract git info from build actions
+        let commitSha = '';
+        let branch = '';
+        for (const action of actions) {
+          const rev = action['lastBuiltRevision'] as Record<string, unknown> | undefined;
+          if (rev) {
+            commitSha = String(rev['SHA1'] ?? '');
+            const branches = (rev['branch'] as Record<string, unknown>[]) ?? [];
+            branch = String(branches[0]?.['name'] ?? '').replace('refs/remotes/origin/', '');
+            break;
+          }
+        }
+
+        const result = String(build['result'] ?? 'UNKNOWN');
+        const timestamp = Number(build['timestamp'] ?? 0);
+        const duration = Number(build['duration'] ?? 0);
+        const buildUrl = String(build['url'] ?? '');
+
+        return {
+          externalRunId: `${jobName}/${build['number']}`,
+          workflowName: jobName,
+          status: this.mapJenkinsStatus(result),
+          branch: branch || 'unknown',
+          commitSha,
+          startedAt: timestamp ? new Date(timestamp).toISOString() : null,
+          completedAt: timestamp && duration
+            ? new Date(timestamp + duration).toISOString()
+            : null,
+          duration: duration > 0 ? Math.round(duration / 1000) : null,
+          url: buildUrl || null,
+          provider: 'jenkins',
+        };
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to list Jenkins pipeline runs for ${jobName}: ${(error as Error).message}`,
+      );
+      return [];
+    }
+  }
+
+  private mapJenkinsStatus(
+    result: string,
+  ): ProviderPipelineRun['status'] {
+    switch (result.toUpperCase()) {
+      case 'SUCCESS':
+        return 'success';
+      case 'FAILURE':
+      case 'UNSTABLE':
+        return 'failed';
+      case 'ABORTED':
+        return 'cancelled';
+      case 'NOT_BUILT':
+        return 'pending';
+      case 'UNKNOWN':
+      case 'null':
+        return 'running'; // null result = still building
+      default:
+        return 'unknown';
     }
   }
 

@@ -14,6 +14,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderPipelineRun,
   ProviderRepository,
   WebhookPayloadResult,
 } from '../interfaces/ci-provider.interface';
@@ -289,6 +290,54 @@ export class GitLabCiProvider extends CiProviderBase {
       );
       return null;
     }
+  }
+
+  // ─── Pipeline Discovery ─────────────────────────────────────────────────
+
+  override async listRecentPipelineRuns(
+    config: CiConnectionConfig,
+    _repoFullName: string,
+    limit: number,
+  ): Promise<ProviderPipelineRun[]> {
+    const client = this.buildClient(config);
+    const projectId = encodeURIComponent(config.repo);
+    try {
+      const response = await client.get(`/projects/${projectId}/pipelines`, {
+        params: { per_page: limit, order_by: 'updated_at', sort: 'desc' },
+      });
+      const pipelines = (response.data ?? []) as Record<string, unknown>[];
+      return pipelines.map((p) => {
+        const status = String(p['status'] ?? '');
+        const createdAt = p['created_at'] ? String(p['created_at']) : null;
+        const updatedAt = p['updated_at'] ? String(p['updated_at']) : null;
+        const durationMs = createdAt && updatedAt
+          ? new Date(updatedAt).getTime() - new Date(createdAt).getTime()
+          : null;
+        return {
+          externalRunId: String(p['id'] ?? ''),
+          workflowName: p['source'] ? String(p['source']) : null,
+          status: this.mapGitLabStatus(status),
+          branch: String(p['ref'] ?? ''),
+          commitSha: String(p['sha'] ?? ''),
+          startedAt: createdAt,
+          completedAt: updatedAt,
+          duration: durationMs !== null ? Math.round(durationMs / 1000) : null,
+          url: p['web_url'] ? String(p['web_url']) : null,
+          provider: 'gitlab',
+        };
+      });
+    } catch (error) {
+      this.logger.error(`Failed to list GitLab pipelines: ${(error as Error).message}`);
+      return [];
+    }
+  }
+
+  private mapGitLabStatus(status: string): ProviderPipelineRun['status'] {
+    if (status === 'success') return 'success';
+    if (status === 'failed') return 'failed';
+    if (status === 'running' || status === 'pending' || status === 'created') return 'running';
+    if (status === 'canceled' || status === 'skipped') return 'cancelled';
+    return 'unknown';
   }
 
   // ─── SCM Operations ───────────────────────────────────────────────────────

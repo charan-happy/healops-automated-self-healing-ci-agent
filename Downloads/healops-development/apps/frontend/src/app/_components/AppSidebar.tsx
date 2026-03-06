@@ -85,9 +85,7 @@ export function AppSidebar() {
   const baseHost = typeof window !== "undefined" ? window.location.hostname : "localhost";
   const proto = typeof window !== "undefined" ? window.location.protocol : "http:";
 
-  const orgName =
-    (onboardingStatus?.data?.organization as { name?: string } | undefined)
-      ?.name ?? "My Org";
+  const orgName = onboardingStatus?.organization?.name ?? "My Org";
   const planName = subscription?.plan?.name ?? "Free Plan";
   const initials = orgName.slice(0, 2).toUpperCase();
 
@@ -111,7 +109,7 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <Separator className="bg-white/[0.06]" />
+        <Separator className="bg-border/30" />
       </SidebarHeader>
 
       <SidebarContent>
@@ -218,7 +216,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <Separator className="bg-white/[0.06]" />
+      <Separator className="bg-border/30" />
       <SidebarFooter>
         <div className="flex justify-center py-1 group-data-[collapsible=icon]:hidden">
           <GeekyAntsBadge />

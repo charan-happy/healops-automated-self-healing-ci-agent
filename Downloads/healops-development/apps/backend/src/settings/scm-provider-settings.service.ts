@@ -175,6 +175,11 @@ export class ScmProviderSettingsService {
     const configData = (config.config as Record<string, string>) ?? {};
 
     try {
+      // For bitbucket, call the Bitbucket API directly since there's no CI provider for it
+      if (config.providerType === 'bitbucket') {
+        return this.listBitbucketRepos(config.id, configData);
+      }
+
       const provider = this.ciProviderFactory.getProvider(config.providerType);
       const authToken = configData['accessToken'] ?? configData['installationId'] ?? '';
       const serverUrl = configData['serverUrl'];
@@ -196,12 +201,54 @@ export class ScmProviderSettingsService {
         })),
       };
     } catch (err) {
-      this.logger.warn(`Failed to list repos for SCM config ${configId}: ${(err as Error).message}`);
+      this.logger.error(`Failed to list repos for SCM config ${configId} (${config.providerType}): ${(err as Error).message}`);
       return {
         provider: config.providerType,
         providerConfigId: config.id,
         repos: [],
+        error: (err as Error).message,
       };
+    }
+  }
+
+  private async listBitbucketRepos(providerConfigId: string, configData: Record<string, string>) {
+    const workspace = configData['workspace'];
+    const appPassword = configData['accessToken'] ?? configData['appPassword'] ?? '';
+
+    if (!workspace || !appPassword) {
+      this.logger.warn('Bitbucket: missing workspace or app password');
+      return { provider: 'bitbucket', providerConfigId, repos: [], error: 'Missing workspace or app password' };
+    }
+
+    try {
+      const { default: axios } = await import('axios');
+      const response = await axios.get(
+        `https://api.bitbucket.org/2.0/repositories/${workspace}`,
+        {
+          auth: { username: workspace, password: appPassword },
+          params: { pagelen: 100 },
+          timeout: 30_000,
+        },
+      );
+
+      const repos = (response.data?.values ?? []).map((r: Record<string, unknown>) => {
+        const mainbranch = r['mainbranch'] as Record<string, string> | undefined;
+        const links = r['links'] as Record<string, Record<string, string>> | undefined;
+        return {
+          externalRepoId: String(r['uuid'] ?? r['slug'] ?? ''),
+          name: String(r['full_name'] ?? r['slug'] ?? ''),
+          defaultBranch: mainbranch?.['name'] ?? 'main',
+          language: String(r['language'] ?? ''),
+          isPrivate: Boolean(r['is_private']),
+          url: links?.['html']?.['href'] ?? '',
+        };
+      });
+
+      this.logger.log(`Bitbucket: found ${repos.length} repos in workspace ${workspace}`);
+      return { provider: 'bitbucket', providerConfigId, repos };
+    } catch (err) {
+      this.logger.error(`Bitbucket API error: ${(err as Error).message}`);
+      return { provider: 'bitbucket', providerConfigId, repos: [], error: (err as Error).message };
     }
   }
 

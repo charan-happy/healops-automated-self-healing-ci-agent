@@ -8,13 +8,14 @@ import AppBreadcrumb from "@/app/_components/AppBreadcrumb";
 import { Heart, AlertTriangle, Loader2, X } from "lucide-react";
 import { useAuth } from "@/app/_libs/context/AuthContext";
 import { resendVerificationApi } from "@/app/_libs/healops-api";
+import { ThemeToggle } from "@/app/_components/ThemeToggle";
 
 const contributors = [
-  { name: "Deepanshu Goyal", gradient: "from-cyan-400 via-emerald-400 to-teal-300" },
-  { name: "Jahnavi Sardana", gradient: "from-violet-400 via-purple-400 to-fuchsia-400" },
-  { name: "Nagacharan Gudiyatham", gradient: "from-amber-400 via-orange-400 to-rose-400" },
-  { name: "Ashish Gour", gradient: "from-sky-400 via-blue-400 to-indigo-400" },
-  { name: "Vikas Goyal", gradient: "from-emerald-400 via-green-400 to-lime-400" },
+  { name: "Deepanshu Goyal", gradient: "from-cyan-400 via-emerald-400 to-teal-300", linkedin: "https://www.linkedin.com/in/deepanshugoyal10" },
+  { name: "Jahanvi Sardana", gradient: "from-violet-400 via-purple-400 to-fuchsia-400", linkedin: "https://www.linkedin.com/in/jahanvi-sardana-62203a199" },
+  { name: "Nagacharan Gudiyatham", gradient: "from-amber-400 via-orange-400 to-rose-400", linkedin: "https://linkedin.com/in/nagacharan-g" },
+  { name: "Ashish Gour", gradient: "from-sky-400 via-blue-400 to-indigo-400", linkedin: "https://www.linkedin.com/in/ashishgour" },
+  { name: "Vikas Goyal", gradient: "from-emerald-400 via-green-400 to-lime-400", linkedin: "https://www.linkedin.com/in/vikas-goyal-5b69841b5" },
 ];
 
 function EmailVerificationBanner() {
@@ -73,21 +74,24 @@ export default function DashboardLayout({
     <SidebarProvider defaultOpen={false} className="h-screen overflow-hidden">
       <AppSidebar />
       <SidebarInset className="!min-h-0 min-w-0 h-full flex flex-col overflow-hidden">
-        <header className="z-20 flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-card/80 backdrop-blur-xl px-6">
+        <header className="z-20 flex h-14 shrink-0 items-center gap-2 border-b border-border/30 bg-card/80 backdrop-blur-xl px-6">
           <SidebarTrigger className="-ml-1 size-7 text-muted-foreground hover:text-foreground" />
-          <Separator orientation="vertical" className="mr-2 h-4 bg-white/10" />
+          <Separator orientation="vertical" className="mr-2 h-4 bg-border/30" />
           <Suspense fallback={null}>
             <AppBreadcrumb />
           </Suspense>
+          <div className="ml-auto">
+            <ThemeToggle />
+          </div>
         </header>
         <EmailVerificationBanner />
         <div className="relative flex-1 overflow-y-auto overflow-x-hidden bg-grid-pattern">
           {children}
 
           {/* ─── Contributors Footer ─── */}
-          <footer className="border-t border-white/[0.06] px-6 py-6">
+          <footer className="border-t border-border/30 px-6 py-6">
             <div className="mx-auto max-w-5xl">
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 backdrop-blur-sm">
+              <div className="rounded-xl border border-border/30 bg-white/[0.02] p-4 backdrop-blur-sm">
                 <div className="mb-3 flex items-center justify-center gap-2">
                   <Heart className="size-3.5 text-rose-400" />
                   <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -96,14 +100,19 @@ export default function DashboardLayout({
                   <Heart className="size-3.5 text-rose-400" />
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  {contributors.map((c) => (
-                    <span
-                      key={c.name}
-                      className={`inline-block rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-xs font-bold bg-gradient-to-r ${c.gradient} bg-clip-text text-transparent transition-all hover:scale-105 hover:border-white/[0.15] hover:bg-white/[0.08] hover:shadow-lg`}
-                    >
-                      {c.name}
-                    </span>
-                  ))}
+                  {contributors.map((c) => {
+                    const Tag = ("linkedin" in c && c.linkedin) ? "a" : "span";
+                    const linkProps = ("linkedin" in c && c.linkedin) ? { href: c.linkedin, target: "_blank" as const, rel: "noopener noreferrer" } : {};
+                    return (
+                      <Tag
+                        key={c.name}
+                        {...linkProps}
+                        className={`inline-block rounded-full border border-border/30 bg-card/50 px-3 py-1 text-xs font-bold bg-gradient-to-r ${c.gradient} bg-clip-text text-transparent transition-all hover:scale-105 hover:border-border hover:bg-card hover:shadow-lg ${"linkedin" in c && c.linkedin ? "cursor-pointer" : ""}`}
+                      >
+                        {c.name}
+                      </Tag>
+                    );
+                  })}
                 </div>
                 <p className="mt-2 text-center text-[10px] text-muted-foreground/40">
                   &copy; {new Date().getFullYear()} HealOps &mdash; Autonomous Pipeline Healing

@@ -6,6 +6,7 @@ import { MetricsGrid } from "../_components/dashboard/MetricsGrid";
 import { TrendChart } from "../_components/dashboard/TrendChart";
 import { RecentActivityFeed } from "../_components/dashboard/RecentActivityFeed";
 import { RepoHealthGrid } from "../_components/dashboard/RepoHealthGrid";
+import { LiveRepairStream } from "../_components/dashboard/LiveRepairStream";
 import {
   fetchDashboardMetrics,
   fetchRecentJobs,
@@ -161,7 +162,7 @@ export default function DashboardPage() {
             Overview of your autonomous repair pipeline
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-lg border border-border/30 bg-card/50 px-3 py-1.5 text-xs text-muted-foreground">
           <span className="size-2 animate-pulse rounded-full bg-emerald-400" />
           Agent Active
         </div>
@@ -171,7 +172,7 @@ export default function DashboardPage() {
       {!loading && (ciProviders.length > 0 || scmProviders.length > 0) && (
         <div className="grid gap-4 sm:grid-cols-2">
           {/* CI Providers Card */}
-          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+          <div className="rounded-xl border border-border/30 bg-card/50 p-5">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="rounded-lg bg-violet-500/10 p-2">
@@ -203,7 +204,7 @@ export default function DashboardPage() {
                       <XCircle className="size-3.5 text-red-400" />
                     )}
                     <span className="text-sm">{p.displayName ?? p.providerType}</span>
-                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                    <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
                       {p.providerType}
                     </span>
                   </div>
@@ -213,7 +214,7 @@ export default function DashboardPage() {
           </div>
 
           {/* SCM Providers Card */}
-          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+          <div className="rounded-xl border border-border/30 bg-card/50 p-5">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="rounded-lg bg-brand-cyan/10 p-2">
@@ -245,7 +246,7 @@ export default function DashboardPage() {
                       <XCircle className="size-3.5 text-red-400" />
                     )}
                     <span className="text-sm">{p.displayName ?? p.providerType}</span>
-                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                    <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
                       {p.providerType}
                     </span>
                     {p.hasToken && (
@@ -285,6 +286,9 @@ export default function DashboardPage() {
 
       {/* Metrics */}
       <MetricsGrid metrics={metrics} loading={loading} />
+
+      {/* Live Agent Activity Stream */}
+      <LiveRepairStream />
 
       {/* Trend Chart — full width */}
       <TrendChart

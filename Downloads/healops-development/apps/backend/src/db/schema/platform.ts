@@ -62,6 +62,31 @@ export const repositories = pgTable(
   ],
 );
 
+// ─── Repository CI Links (many-to-many: repos ↔ CI providers) ──────────────
+
+export const repositoryCiLinks = pgTable(
+  'repository_ci_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    repositoryId: uuid('repository_id')
+      .notNull()
+      .references(() => repositories.id),
+    ciProviderConfigId: uuid('ci_provider_config_id').notNull(),
+    pipelineName: varchar('pipeline_name', { length: 255 }),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('idx_repo_ci_links_unique').on(
+      table.repositoryId,
+      table.ciProviderConfigId,
+    ),
+    index('idx_repo_ci_links_repo').on(table.repositoryId),
+  ],
+);
+
 // ─── Repository Settings ────────────────────────────────────────────────────
 
 export const repositorySettings = pgTable('repository_settings', {

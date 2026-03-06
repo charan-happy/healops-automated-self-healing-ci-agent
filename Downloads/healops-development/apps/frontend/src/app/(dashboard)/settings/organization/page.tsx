@@ -14,6 +14,7 @@ import {
   isDemoMode,
   type Invitation,
 } from "@/app/_libs/healops-api";
+import { useOrg } from "@/app/_libs/context/OrgContext";
 
 const DEMO_MEMBERS: Member[] = [
   {
@@ -35,6 +36,7 @@ const DEMO_MEMBERS: Member[] = [
 ];
 
 export default function OrganizationSettingsPage() {
+  const { refresh: refreshOrg } = useOrg();
   const [orgName, setOrgName] = useState("");
   const [originalName, setOriginalName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -96,6 +98,8 @@ export default function OrganizationSettingsPage() {
     if (result) {
       setOriginalName(result.name);
       showMessage("success", "Organization name updated");
+      // Refresh sidebar org name immediately
+      void refreshOrg();
     } else {
       showMessage("error", "Failed to update organization");
     }

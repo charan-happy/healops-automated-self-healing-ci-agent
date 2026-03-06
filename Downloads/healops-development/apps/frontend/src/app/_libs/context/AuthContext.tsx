@@ -126,7 +126,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const tokens = await refreshTokenApi(refreshToken);
         handleTokens(tokens);
         if (savedUser) {
-          setUser(JSON.parse(savedUser) as AuthUser);
+          const parsed = JSON.parse(savedUser) as AuthUser;
+          // Update isEmailVerified from refresh response if available
+          const refreshData = tokens as TokenResponse & { isEmailVerified?: boolean };
+          if (refreshData.isEmailVerified !== undefined) {
+            parsed.isEmailVerified = refreshData.isEmailVerified;
+            localStorage.setItem(USER_KEY, JSON.stringify(parsed));
+          }
+          setUser(parsed);
         }
       } catch {
         clearAuth();

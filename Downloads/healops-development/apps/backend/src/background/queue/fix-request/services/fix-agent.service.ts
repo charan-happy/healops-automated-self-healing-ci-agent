@@ -14,6 +14,35 @@ import { SimilarFixService } from './similar-fix.service';
 import { buildFixGraph } from '../agent/fix-graph';
 import { generateErrorHash, generateContextHash } from '@common/utils/hash';
 import type { FixGraphState, AgentLogEntry } from '../agent/state';
+import { extname } from 'path';
+
+// ─── Language detection from file extension ─────────────────────────────────
+const EXT_TO_LANGUAGE: Record<string, string> = {
+  '.ts': 'typescript',
+  '.tsx': 'typescript',
+  '.js': 'javascript',
+  '.jsx': 'javascript',
+  '.mjs': 'javascript',
+  '.cjs': 'javascript',
+  '.py': 'python',
+  '.go': 'go',
+  '.java': 'java',
+  '.rb': 'ruby',
+  '.rs': 'rust',
+};
+
+function detectLanguage(
+  explicit: string | undefined,
+  filePath: string | undefined,
+): string {
+  if (explicit) return explicit;
+  if (filePath) {
+    const ext = extname(filePath).toLowerCase();
+    const detected = EXT_TO_LANGUAGE[ext];
+    if (detected) return detected;
+  }
+  return 'typescript';
+}
 
 export interface FixAgentInput {
   errorMessage: string;
@@ -124,7 +153,7 @@ export class FixAgentService {
       codeSnippet: input.codeSnippet,
       lineNumber: input.lineNumber,
       filePath: input.filePath ?? '',
-      language: input.language ?? 'typescript',
+      language: detectLanguage(input.language, input.filePath),
       branch: input.branch,
       commitSha: input.commitSha,
       fixRequestId: fixRequest.id,
@@ -405,7 +434,7 @@ export class FixAgentService {
     jobId: string,
   ): Promise<void> {
     try {
-      const language = input.language ?? 'typescript';
+      const language = detectLanguage(input.language, input.filePath);
       const contextHash = generateContextHash(
         input.errorMessage,
         input.codeSnippet,

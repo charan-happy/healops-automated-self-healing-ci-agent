@@ -1,6 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import axios from 'axios';
 import { PlatformRepository } from '@db/repositories/healops/platform.repository';
+import { CiProviderConfigsRepository } from '@db/repositories/healops/ci-provider-configs.repository';
+import { ScmProviderConfigsRepository } from '@db/repositories/healops/scm-provider-configs.repository';
 import { GithubService } from '../github/github.service';
+import { CiProviderFactory } from '../ci-provider/ci-provider.factory';
 
 @Injectable()
 export class ProjectsService {
@@ -8,7 +12,10 @@ export class ProjectsService {
 
   constructor(
     private readonly platformRepository: PlatformRepository,
+    private readonly ciProviderConfigsRepository: CiProviderConfigsRepository,
+    private readonly scmProviderConfigsRepository: ScmProviderConfigsRepository,
     private readonly githubService: GithubService,
+    private readonly ciProviderFactory: CiProviderFactory,
   ) {}
 
   async listRepositories(organizationId: string) {
@@ -43,12 +50,12 @@ export class ProjectsService {
       throw new NotFoundException('Repository not found');
     }
 
-    if (
-      syncFromProvider &&
-      repo.provider === 'github' &&
-      repo.githubInstallationId
-    ) {
-      await this.syncBranchesFromGitHub(repo);
+    if (syncFromProvider) {
+      if (repo.provider === 'github' && repo.githubInstallationId) {
+        await this.syncBranchesFromGitHub(repo);
+      } else if (repo.provider === 'gitlab') {
+        await this.syncBranchesFromGitLab(repo, organizationId);
+      }
     }
 
     const branchRows =
@@ -84,11 +91,21 @@ export class ProjectsService {
       throw new NotFoundException('Branch not found');
     }
 
-    const commitRows = await this.platformRepository.findCommitsByBranch(
+    // Sync commits from provider if none exist in DB yet
+    let commitRows = await this.platformRepository.findCommitsByBranch(
       branchId,
       limit,
       offset,
     );
+
+    if (commitRows.length === 0 && offset === 0) {
+      await this.syncCommitsFromProvider(repo, branch, organizationId, limit);
+      commitRows = await this.platformRepository.findCommitsByBranch(
+        branchId,
+        limit,
+        offset,
+      );
+    }
 
     return commitRows.map((c) => ({
       id: c.id,
@@ -103,6 +120,280 @@ export class ProjectsService {
       pipelineStatus: 'pending' as const,
       agentFixCount: 0,
     }));
+  }
+
+  async addRepositories(
+    organizationId: string,
+    providerConfigId: string,
+    providerType: 'ci' | 'scm',
+    repos: Array<{ externalRepoId: string; name: string; defaultBranch?: string }>,
+  ) {
+    // Resolve the provider type string from the config
+    let providerName: string;
+    if (providerType === 'ci') {
+      const config = await this.ciProviderConfigsRepository.findConfigById(providerConfigId);
+      if (!config || config.organizationId !== organizationId) {
+        throw new BadRequestException('CI provider config not found');
+      }
+      providerName = config.providerType;
+    } else {
+      const config = await this.scmProviderConfigsRepository.findConfigById(providerConfigId);
+      if (!config || config.organizationId !== organizationId) {
+        throw new BadRequestException('SCM provider config not found');
+      }
+      providerName = config.providerType;
+    }
+
+    const created = await Promise.all(
+      repos.map(async (repo) => {
+        // Idempotent: check if repo already exists
+        const existing = await this.platformRepository.findRepositoryByProviderAndExternalId(
+          providerName,
+          repo.externalRepoId,
+        );
+        if (existing) return existing;
+
+        return this.platformRepository.createRepository({
+          organizationId,
+          provider: providerName,
+          externalRepoId: repo.externalRepoId,
+          name: repo.name,
+          defaultBranch: repo.defaultBranch ?? 'main',
+          ciProviderConfigId: providerType === 'ci' ? providerConfigId : undefined,
+        });
+      }),
+    );
+
+    this.logger.log(`Added ${created.length} repositories for org ${organizationId} via ${providerName}`);
+
+    return created.map((r) => ({
+      id: r.id,
+      name: r.name,
+      provider: r.provider,
+      defaultBranch: r.defaultBranch,
+    }));
+  }
+
+  /**
+   * Fetches pipeline runs from ALL active CI providers for a repository.
+   *
+   * A GitLab-hosted repo might have BOTH GitLab CI pipelines AND Jenkins builds.
+   * A GitHub repo might have GitHub Actions AND Jenkins. We query every provider
+   * that has an active config for the org, merge the results, and sort by time.
+   */
+  async listPipelineRuns(
+    repositoryId: string,
+    organizationId: string,
+    limit: number,
+  ) {
+    const repo = await this.platformRepository.findRepositoryById(repositoryId);
+    if (!repo || repo.organizationId !== organizationId) {
+      throw new NotFoundException('Repository not found');
+    }
+
+    const repoProvider = repo.provider ?? 'github';
+    const parts = repo.name.split('/');
+    type PipelineRun = import('../ci-provider/interfaces/ci-provider.interface').ProviderPipelineRun;
+    const queries: Array<Promise<PipelineRun[]>> = [];
+    const coveredConfigIds = new Set<string>();
+
+    // ─── 1) Explicit CI links (repository_ci_links table) ──────────────
+    const ciLinks = await this.platformRepository.findCiLinksByRepository(repositoryId);
+    for (const link of ciLinks) {
+      if (!link.isActive) continue;
+      const config = await this.ciProviderConfigsRepository.findConfigById(link.ciProviderConfigId);
+      if (!config?.isActive) continue;
+
+      coveredConfigIds.add(config.id);
+      const configData = (config.config as Record<string, string>) ?? {};
+      const authToken = configData['accessToken'] ?? configData['authToken'] ?? '';
+      if (!authToken) continue;
+
+      // Use custom pipelineName from the link, or derive from repo
+      const pipelineName = link.pipelineName
+        ?? this.deriveRepoIdentifier(config.providerType, repo.externalRepoId, parts);
+
+      queries.push(
+        this.fetchPipelinesFromProvider(config.providerType, {
+          owner: parts[0] ?? '',
+          repo: pipelineName,
+          authToken,
+          serverUrl: configData['serverUrl'],
+        }, repo.name, limit),
+      );
+    }
+
+    // ─── 2) SCM-native CI (GitLab CI for GitLab repos, GitHub Actions) ─
+    const scmConfigs = await this.scmProviderConfigsRepository.findConfigsByOrganization(organizationId);
+    const scmConfig = scmConfigs.find((c) => c.isActive && c.providerType === repoProvider);
+    if (scmConfig && !coveredConfigIds.has(scmConfig.id)) {
+      const configData = (scmConfig.config as Record<string, string>) ?? {};
+      const authToken = configData['accessToken'] ?? '';
+      if (authToken) {
+        const repoIdentifier = this.deriveRepoIdentifier(repoProvider, repo.externalRepoId, parts);
+        queries.push(
+          this.fetchPipelinesFromProvider(repoProvider, {
+            owner: parts[0] ?? '',
+            repo: repoIdentifier,
+            authToken,
+            serverUrl: configData['serverUrl'],
+          }, repo.name, limit),
+        );
+      }
+    }
+
+    // ─── 3) Org-level CI configs NOT already covered by explicit links ─
+    if (ciLinks.length === 0) {
+      // No explicit links — fall back to querying ALL org-level CI configs
+      const ciConfigs = await this.ciProviderConfigsRepository.findConfigsByOrganization(organizationId);
+      for (const ciConfig of ciConfigs) {
+        if (!ciConfig.isActive) continue;
+        if (ciConfig.providerType === repoProvider && scmConfig) continue;
+
+        const configData = (ciConfig.config as Record<string, string>) ?? {};
+        const authToken = configData['accessToken'] ?? configData['authToken'] ?? '';
+        if (!authToken) continue;
+
+        const repoIdentifier = this.deriveRepoIdentifier(ciConfig.providerType, repo.externalRepoId, parts);
+        queries.push(
+          this.fetchPipelinesFromProvider(ciConfig.providerType, {
+            owner: parts[0] ?? '',
+            repo: repoIdentifier,
+            authToken,
+            serverUrl: configData['serverUrl'],
+          }, repo.name, limit),
+        );
+      }
+    }
+
+    if (queries.length === 0) return [];
+
+    const results = await Promise.all(queries);
+    const allRuns = results.flat();
+
+    allRuns.sort((a, b) => {
+      const timeA = a.startedAt ? new Date(a.startedAt).getTime() : 0;
+      const timeB = b.startedAt ? new Date(b.startedAt).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    return allRuns.slice(0, limit);
+  }
+
+  /** Derive the provider-specific repo/job identifier from the repo data. */
+  private deriveRepoIdentifier(providerType: string, externalRepoId: string, nameParts: string[]): string {
+    if (providerType === 'gitlab') return externalRepoId;
+    if (providerType === 'github') return nameParts[1] ?? nameParts[0] ?? '';
+    // Jenkins and others: use short repo name
+    return nameParts[1] ?? nameParts[0] ?? '';
+  }
+
+  private async fetchPipelinesFromProvider(
+    providerType: string,
+    config: { owner: string; repo: string; authToken: string; serverUrl?: string | undefined },
+    repoFullName: string,
+    limit: number,
+  ): Promise<import('../ci-provider/interfaces/ci-provider.interface').ProviderPipelineRun[]> {
+    try {
+      const provider = this.ciProviderFactory.getProvider(providerType);
+      return await provider.listRecentPipelineRuns(config, repoFullName, limit);
+    } catch (err) {
+      this.logger.warn(`Failed to fetch ${providerType} pipelines for ${repoFullName}: ${(err as Error).message}`);
+      return [];
+    }
+  }
+
+  // ─── CI Link Management ──────────────────────────────────────────────────
+
+  async listCiLinks(repositoryId: string, organizationId: string) {
+    const repo = await this.platformRepository.findRepositoryById(repositoryId);
+    if (!repo || repo.organizationId !== organizationId) {
+      throw new NotFoundException('Repository not found');
+    }
+
+    const links = await this.platformRepository.findCiLinksByRepository(repositoryId);
+    // Enrich with provider details
+    const enriched = await Promise.all(
+      links.map(async (link) => {
+        const config = await this.ciProviderConfigsRepository.findConfigById(link.ciProviderConfigId);
+        return {
+          id: link.id,
+          ciProviderConfigId: link.ciProviderConfigId,
+          providerType: config?.providerType ?? 'unknown',
+          displayName: config?.displayName ?? config?.providerType ?? 'Unknown',
+          pipelineName: link.pipelineName,
+          isActive: link.isActive,
+          createdAt: link.createdAt.toISOString(),
+        };
+      }),
+    );
+    return enriched;
+  }
+
+  async addCiLink(
+    repositoryId: string,
+    organizationId: string,
+    ciProviderConfigId: string,
+    pipelineName?: string,
+  ) {
+    const repo = await this.platformRepository.findRepositoryById(repositoryId);
+    if (!repo || repo.organizationId !== organizationId) {
+      throw new NotFoundException('Repository not found');
+    }
+
+    // Verify the CI config belongs to the same org
+    const config = await this.ciProviderConfigsRepository.findConfigById(ciProviderConfigId);
+    if (!config || config.organizationId !== organizationId) {
+      throw new BadRequestException('CI provider config not found');
+    }
+
+    const link = await this.platformRepository.createCiLink({
+      repositoryId,
+      ciProviderConfigId,
+      pipelineName,
+    });
+
+    if (!link) {
+      throw new BadRequestException('CI provider already linked to this repository');
+    }
+
+    this.logger.log(`Linked CI provider ${config.providerType} to repo ${repo.name}`);
+    return {
+      id: link.id,
+      ciProviderConfigId: link.ciProviderConfigId,
+      providerType: config.providerType,
+      displayName: config.displayName ?? config.providerType,
+      pipelineName: link.pipelineName,
+      isActive: link.isActive,
+      createdAt: link.createdAt.toISOString(),
+    };
+  }
+
+  async updateCiLink(
+    repositoryId: string,
+    organizationId: string,
+    linkId: string,
+    data: { pipelineName?: string; isActive?: boolean },
+  ) {
+    const repo = await this.platformRepository.findRepositoryById(repositoryId);
+    if (!repo || repo.organizationId !== organizationId) {
+      throw new NotFoundException('Repository not found');
+    }
+
+    const updated = await this.platformRepository.updateCiLink(linkId, data);
+    if (!updated) throw new NotFoundException('CI link not found');
+    return updated;
+  }
+
+  async removeCiLink(repositoryId: string, organizationId: string, linkId: string) {
+    const repo = await this.platformRepository.findRepositoryById(repositoryId);
+    if (!repo || repo.organizationId !== organizationId) {
+      throw new NotFoundException('Repository not found');
+    }
+
+    const removed = await this.platformRepository.removeCiLink(linkId);
+    if (!removed) throw new NotFoundException('CI link not found');
+    return { removed: true };
   }
 
   private async syncBranchesFromGitHub(repo: {
@@ -143,6 +434,168 @@ export class ProjectsService {
       this.logger.warn(
         `Failed to sync branches from GitHub for ${repo.name}: ${(error as Error).message}`,
       );
+    }
+  }
+
+  private async syncBranchesFromGitLab(
+    repo: { id: string; name: string; externalRepoId: string; defaultBranch: string | null },
+    organizationId: string,
+  ) {
+    try {
+      // Find the GitLab SCM or CI provider config to get the access token
+      const scmConfigs = await this.scmProviderConfigsRepository.findConfigsByOrganization(organizationId);
+      const gitlabConfig = scmConfigs.find((c) => c.isActive && c.providerType === 'gitlab');
+      if (!gitlabConfig) return;
+
+      const configData = (gitlabConfig.config as Record<string, string>) ?? {};
+      const accessToken = configData['accessToken'] ?? '';
+      const serverUrl = configData['serverUrl'] ?? 'https://gitlab.com';
+      if (!accessToken) return;
+
+      const apiBase = serverUrl.replace(/\/+$/, '');
+      const projectId = encodeURIComponent(repo.externalRepoId);
+
+      const response = await axios.get(
+        `${apiBase}/api/v4/projects/${projectId}/repository/branches`,
+        {
+          headers: { 'PRIVATE-TOKEN': accessToken },
+          params: { per_page: 100 },
+          timeout: 15_000,
+        },
+      );
+
+      const branches = (response.data ?? []) as Array<{
+        name: string;
+        protected: boolean;
+        commit?: { author_name?: string; committed_date?: string };
+      }>;
+
+      for (const branch of branches) {
+        await this.platformRepository.upsertBranch({
+          repositoryId: repo.id,
+          name: branch.name,
+          isDefault: branch.name === (repo.defaultBranch ?? 'main'),
+          isProtected: branch.protected ?? false,
+          isHealopsBranch:
+            branch.name.startsWith('healops/fix/') ||
+            branch.name.startsWith('agent-fix/'),
+        });
+      }
+
+      this.logger.log(`Synced ${branches.length} GitLab branches for ${repo.name}`);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to sync branches from GitLab for ${repo.name}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  private async syncCommitsFromProvider(
+    repo: { id: string; name: string; externalRepoId: string; provider: string | null; githubInstallationId: string | null },
+    branch: { id: string; name: string },
+    organizationId: string,
+    limit: number,
+  ) {
+    const providerName = repo.provider ?? 'github';
+
+    try {
+      if (providerName === 'gitlab') {
+        await this.syncCommitsFromGitLab(repo, branch, organizationId, limit);
+      } else if (providerName === 'github' && repo.githubInstallationId) {
+        await this.syncCommitsFromGitHub(repo, branch, limit);
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to sync commits for ${repo.name}/${branch.name}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  private async syncCommitsFromGitLab(
+    repo: { id: string; name: string; externalRepoId: string },
+    branch: { id: string; name: string },
+    organizationId: string,
+    limit: number,
+  ) {
+    const scmConfigs = await this.scmProviderConfigsRepository.findConfigsByOrganization(organizationId);
+    const gitlabConfig = scmConfigs.find((c) => c.isActive && c.providerType === 'gitlab');
+    if (!gitlabConfig) return;
+
+    const configData = (gitlabConfig.config as Record<string, string>) ?? {};
+    const accessToken = configData['accessToken'] ?? '';
+    const serverUrl = configData['serverUrl'] ?? 'https://gitlab.com';
+    if (!accessToken) return;
+
+    const apiBase = serverUrl.replace(/\/+$/, '');
+    const projectId = encodeURIComponent(repo.externalRepoId);
+
+    const response = await axios.get(
+      `${apiBase}/api/v4/projects/${projectId}/repository/commits`,
+      {
+        headers: { 'PRIVATE-TOKEN': accessToken },
+        params: { ref_name: branch.name, per_page: limit },
+        timeout: 15_000,
+      },
+    );
+
+    const gitlabCommits = (response.data ?? []) as Array<{
+      id: string;
+      short_id: string;
+      message: string;
+      author_name: string;
+      committed_date: string;
+    }>;
+
+    for (const gc of gitlabCommits) {
+      await this.platformRepository.createCommit({
+        repositoryId: repo.id,
+        branchId: branch.id,
+        commitSha: gc.id,
+        author: gc.author_name,
+        message: gc.message,
+        committedAt: new Date(gc.committed_date),
+        source: 'developer',
+      });
+    }
+
+    this.logger.log(`Synced ${gitlabCommits.length} commits for ${repo.name}/${branch.name}`);
+  }
+
+  private async syncCommitsFromGitHub(
+    repo: { id: string; name: string; githubInstallationId: string | null },
+    branch: { id: string; name: string },
+    limit: number,
+  ) {
+    if (!repo.githubInstallationId) return;
+
+    const parts = repo.name.split('/');
+    const owner = parts[0] ?? '';
+    const repoName = parts[1] ?? repo.name;
+
+    try {
+      const octokit = await this.githubService.getAppProvider().getInstallationClient(repo.githubInstallationId);
+      const { data } = await octokit.repos.listCommits({
+        owner,
+        repo: repoName,
+        sha: branch.name,
+        per_page: limit,
+      });
+
+      for (const gc of data) {
+        await this.platformRepository.createCommit({
+          repositoryId: repo.id,
+          branchId: branch.id,
+          commitSha: gc.sha,
+          author: gc.commit?.author?.name ?? 'unknown',
+          message: gc.commit?.message ?? '',
+          committedAt: gc.commit?.author?.date ? new Date(gc.commit.author.date) : new Date(),
+          source: 'developer',
+        });
+      }
+
+      this.logger.log(`Synced ${data.length} GitHub commits for ${repo.name}/${branch.name}`);
+    } catch (error) {
+      this.logger.warn(`Failed to sync GitHub commits for ${repo.name}/${branch.name}: ${(error as Error).message}`);
     }
   }
 }

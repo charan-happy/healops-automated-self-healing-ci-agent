@@ -122,8 +122,22 @@ export class AuthService {
    * Refreshes the token pair using a valid refresh token.
    * Delegates to TokenService which handles rotation and revocation.
    */
-  async refreshTokens(refreshToken: string): Promise<TokenResponse> {
-    return this.tokenService.refreshTokens(refreshToken);
+  async refreshTokens(refreshToken: string): Promise<TokenResponse & { isEmailVerified: boolean }> {
+    const tokens = await this.tokenService.refreshTokens(refreshToken);
+    // Extract email from the new access token to look up email verification status
+    let isEmailVerified = false;
+    try {
+      const payload = JSON.parse(
+        Buffer.from(tokens.accessToken.split('.')[1] ?? '', 'base64').toString(),
+      ) as { email?: string };
+      if (payload.email) {
+        const user = await this.authRepository.findUserByEmail(payload.email);
+        isEmailVerified = user?.isEmailVerified ?? false;
+      }
+    } catch {
+      // If parsing fails, default to false
+    }
+    return { ...tokens, isEmailVerified };
   }
 
   /**

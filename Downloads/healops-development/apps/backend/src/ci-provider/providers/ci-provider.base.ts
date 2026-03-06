@@ -7,6 +7,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderPipelineRun,
   ProviderRepository,
   WebhookPayloadResult,
 } from '../interfaces/ci-provider.interface';
@@ -64,6 +65,18 @@ export abstract class CiProviderBase {
     authToken: string,
     serverUrl?: string,
   ): Promise<ProviderRepository[]>;
+
+  // ─── Pipeline Discovery ────────────────────────────────────────────────────
+
+  /**
+   * List recent pipeline/workflow runs for a repository.
+   * Used for displaying CI activity in the Projects page.
+   */
+  abstract listRecentPipelineRuns(
+    config: CiConnectionConfig,
+    repoFullName: string,
+    limit: number,
+  ): Promise<ProviderPipelineRun[]>;
 
   // ─── SCM Operations ─────────────────────────────────────────────────────────
 

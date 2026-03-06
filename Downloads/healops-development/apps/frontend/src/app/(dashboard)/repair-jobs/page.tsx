@@ -93,7 +93,7 @@ export default function RepairJobsPage() {
             className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
               filter === f.key
                 ? "border-brand-cyan/50 bg-brand-cyan/10 text-brand-cyan"
-                : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+                : "border-border/30 bg-card/50 text-muted-foreground hover:text-foreground"
             }`}
           >
             {f.label}
@@ -120,7 +120,7 @@ export default function RepairJobsPage() {
             return (
               <div
                 key={job.id}
-                className="flex items-center gap-4 rounded-xl border border-white/[0.06] bg-card/60 p-4 transition-colors hover:bg-card/80"
+                className="flex items-center gap-4 rounded-xl border border-border/30 bg-card/60 p-4 transition-colors hover:bg-card/80"
               >
                 <Icon className={`size-5 shrink-0 ${config.className}`} />
 
@@ -129,7 +129,7 @@ export default function RepairJobsPage() {
                     <span className="truncate text-sm font-medium">
                       {job.repository}
                     </span>
-                    <span className="shrink-0 rounded bg-white/5 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+                    <span className="shrink-0 rounded bg-card/50 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
                       {job.branch}
                     </span>
                   </div>
@@ -156,7 +156,7 @@ export default function RepairJobsPage() {
                       href={job.prUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-brand-cyan transition-colors hover:bg-brand-cyan/10"
+                      className="flex items-center gap-1 rounded-md border border-border/30 px-2 py-1 text-xs text-brand-cyan transition-colors hover:bg-brand-cyan/10"
                     >
                       PR
                       <ArrowUpRight className="size-3" />

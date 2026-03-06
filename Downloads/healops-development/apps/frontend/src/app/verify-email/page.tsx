@@ -22,7 +22,20 @@ export default function VerifyEmailPage() {
     }
 
     verifyEmailApi(token)
-      .then(() => setStatus("success"))
+      .then(() => {
+        setStatus("success");
+        // Update localStorage so the dashboard banner disappears
+        try {
+          const savedUser = localStorage.getItem("healops_user");
+          if (savedUser) {
+            const parsed = JSON.parse(savedUser);
+            parsed.isEmailVerified = true;
+            localStorage.setItem("healops_user", JSON.stringify(parsed));
+          }
+        } catch {
+          // ignore parse errors
+        }
+      })
       .catch((err) => {
         setStatus("error");
         setErrorMsg(err instanceof Error ? err.message : "Verification failed");

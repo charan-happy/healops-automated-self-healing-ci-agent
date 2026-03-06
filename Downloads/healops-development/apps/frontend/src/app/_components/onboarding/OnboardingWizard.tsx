@@ -56,8 +56,8 @@ export default function OnboardingWizard() {
     if (onboardingStatus) {
       const idx = STEP_MAP[onboardingStatus.currentStep] ?? 0;
       setCurrentIndex(idx);
-      if (onboardingStatus.data) {
-        setData(onboardingStatus.data);
+      if (onboardingStatus.config) {
+        setData(onboardingStatus.config);
       }
     }
   }, [onboardingStatus]);

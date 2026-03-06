@@ -451,19 +451,24 @@ export default function LandingPage() {
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3">
               {[
-                { name: "Deepanshu Goyal", gradient: "from-brand-cyan via-emerald-400 to-teal-300" },
-                { name: "Jahnavi Sardana", gradient: "from-violet-400 via-purple-400 to-fuchsia-400" },
-                { name: "Nagacharan Gudiyatham", gradient: "from-amber-400 via-orange-400 to-rose-400" },
-                { name: "Ashish Gour", gradient: "from-sky-400 via-blue-400 to-indigo-400" },
+                { name: "Deepanshu Goyal", gradient: "from-brand-cyan via-emerald-400 to-teal-300", linkedin: "https://www.linkedin.com/in/deepanshugoyal10" },
+                { name: "Jahanvi Sardana", gradient: "from-violet-400 via-purple-400 to-fuchsia-400", linkedin: "https://www.linkedin.com/in/jahanvi-sardana-62203a199" },
+                { name: "Nagacharan Gudiyatham", gradient: "from-amber-400 via-orange-400 to-rose-400", linkedin: "https://linkedin.com/in/nagacharan-g" },
+                { name: "Ashish Gour", gradient: "from-sky-400 via-blue-400 to-indigo-400", linkedin: "https://www.linkedin.com/in/ashishgour" },
                 { name: "Vikas Goyal", gradient: "from-emerald-400 via-green-400 to-lime-400" },
-              ].map((contributor) => (
-                <span
-                  key={contributor.name}
-                  className={`inline-block rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-1.5 text-sm font-bold bg-gradient-to-r ${contributor.gradient} bg-clip-text text-transparent transition-all hover:scale-105 hover:border-white/[0.15] hover:bg-white/[0.08] hover:shadow-lg`}
-                >
-                  {contributor.name}
-                </span>
-              ))}
+              ].map((contributor) => {
+                const Tag = ("linkedin" in contributor && contributor.linkedin) ? "a" : "span";
+                const linkProps = ("linkedin" in contributor && contributor.linkedin) ? { href: contributor.linkedin, target: "_blank" as const, rel: "noopener noreferrer" } : {};
+                return (
+                  <Tag
+                    key={contributor.name}
+                    {...linkProps}
+                    className={`inline-block rounded-full border border-border/30 bg-card/50 px-4 py-1.5 text-sm font-bold bg-gradient-to-r ${contributor.gradient} bg-clip-text text-transparent transition-all hover:scale-105 hover:border-border hover:bg-card hover:shadow-lg ${"linkedin" in contributor && contributor.linkedin ? "cursor-pointer" : ""}`}
+                  >
+                    {contributor.name}
+                  </Tag>
+                );
+              })}
             </div>
           </div>
 

@@ -46,27 +46,45 @@ export class OrganizationSettingsService {
     const updateData: { name?: string; slug?: string; slackWebhookUrl?: string } = {};
     if (data.name) {
       updateData.name = data.name;
-      updateData.slug = data.name
+      let baseSlug = data.name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '');
+      if (!baseSlug) baseSlug = 'org';
+
+      // Check if slug is already taken by another org
+      const existingOrg = await this.platformRepository.findOrganizationBySlug(baseSlug);
+      if (existingOrg && existingOrg.id !== orgId) {
+        // Append random suffix to make it unique
+        const suffix = Math.random().toString(36).slice(2, 6);
+        baseSlug = `${baseSlug}-${suffix}`;
+      }
+      updateData.slug = baseSlug;
     }
     if (data.slackWebhookUrl !== undefined) {
       updateData.slackWebhookUrl = data.slackWebhookUrl;
     }
 
-    const updated = await this.platformRepository.updateOrganization(orgId, updateData);
-    if (!updated) throw new NotFoundException('Organization not found');
+    try {
+      const updated = await this.platformRepository.updateOrganization(orgId, updateData);
+      if (!updated) throw new NotFoundException('Organization not found');
 
-    this.logger.log(`Organization ${orgId} updated`);
+      this.logger.log(`Organization ${orgId} updated`);
 
-    return {
-      id: updated.id,
-      name: updated.name,
-      slug: updated.slug,
-      plan: updated.plan,
-      createdAt: updated.createdAt.toISOString(),
-    };
+      return {
+        id: updated.id,
+        name: updated.name,
+        slug: updated.slug,
+        plan: updated.plan,
+        createdAt: updated.createdAt.toISOString(),
+      };
+    } catch (err) {
+      const message = (err as Error).message ?? '';
+      if (message.includes('unique') || message.includes('duplicate') || message.includes('idx_organizations_slug')) {
+        throw new BadRequestException('Organization name is already taken');
+      }
+      throw err;
+    }
   }
 
   async listMembers(orgId: string) {

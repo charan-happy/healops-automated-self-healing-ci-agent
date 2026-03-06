@@ -917,6 +917,115 @@ export async function fetchBranchCommits(
   );
 }
 
+// ─── Pipeline Runs API ──────────────────────────────────────────────────────
+
+export interface ProviderPipelineRun {
+  externalRunId: string;
+  workflowName: string | null;
+  status: "success" | "failed" | "running" | "cancelled" | "pending" | "unknown";
+  branch: string;
+  commitSha: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  duration: number | null;
+  url: string | null;
+  provider: string;
+}
+
+export async function fetchProjectPipelines(
+  repositoryId: string,
+  limit = 20,
+): Promise<ProviderPipelineRun[] | null> {
+  return fetchApi<ProviderPipelineRun[]>(
+    `/v1/healops/projects/${repositoryId}/pipelines?limit=${limit}`,
+  );
+}
+
+export async function addRepositoriesToOrg(
+  providerConfigId: string,
+  providerType: "ci" | "scm",
+  repositories: Array<{ externalRepoId: string; name: string; defaultBranch?: string }>,
+): Promise<unknown> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/repositories`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ providerConfigId, providerType, repositories }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<unknown>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Repository CI Links API ────────────────────────────────────────────────
+
+export interface RepoCiLink {
+  id: string;
+  ciProviderConfigId: string;
+  providerType: string;
+  displayName: string;
+  pipelineName: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function fetchRepoCiLinks(repoId: string): Promise<RepoCiLink[] | null> {
+  return fetchApi<RepoCiLink[]>(`/v1/healops/projects/${repoId}/ci-links`);
+}
+
+export async function addRepoCiLink(
+  repoId: string,
+  ciProviderConfigId: string,
+  pipelineName?: string,
+): Promise<RepoCiLink | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/${repoId}/ci-links`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ ciProviderConfigId, pipelineName }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<RepoCiLink>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateRepoCiLink(
+  repoId: string,
+  linkId: string,
+  data: { pipelineName?: string; isActive?: boolean },
+): Promise<unknown> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/${repoId}/ci-links/${linkId}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<unknown>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function removeRepoCiLink(repoId: string, linkId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/${repoId}/ci-links/${linkId}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Public Reviews API ─────────────────────────────────────────────────────
 
 export interface PublicReview {
