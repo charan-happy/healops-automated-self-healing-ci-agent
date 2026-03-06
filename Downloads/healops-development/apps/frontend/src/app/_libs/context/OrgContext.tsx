@@ -8,7 +8,8 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { fetchOnboardingStatus, fetchSubscription } from "@/app/_libs/healops-api";
+import { fetchOnboardingStatus, fetchSubscription, getAccessToken } from "@/app/_libs/healops-api";
+import { useAuth } from "@/app/_libs/context/AuthContext";
 import type { OnboardingStatus } from "@/app/_libs/types/onboarding";
 import type { Subscription } from "@/app/_libs/types/settings";
 
@@ -31,12 +32,18 @@ export function useOrg() {
 }
 
 export function OrgProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [onboardingStatus, setOnboardingStatus] =
     useState<OnboardingStatus | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    // Don't fire API calls if no access token is set yet
+    if (!getAccessToken()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [status, sub] = await Promise.all([
@@ -52,9 +59,15 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Only load after auth is ready and user is authenticated
   useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [authLoading, isAuthenticated, load]);
 
   return (
     <OrgContext.Provider

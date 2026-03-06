@@ -48,6 +48,12 @@ export default function SCMProvidersPage() {
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const showMessage = useCallback((type: "success" | "error", text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 4000);
+  }, []);
 
   // Repo browser state
   const [browsingProviderId, setBrowsingProviderId] = useState<string | null>(null);
@@ -103,9 +109,12 @@ export default function SCMProvidersPage() {
       setDialogStep("select");
       setSelectedType(null);
       setConfigFields({});
+      showMessage("success", "SCM provider added successfully");
       void loadProviders();
       // Auto-open repo browser for the new provider
       handleBrowseRepos(result.providerConfigId);
+    } else {
+      showMessage("error", "Failed to add SCM provider. Please check your credentials and try again.");
     }
   };
 
@@ -117,7 +126,8 @@ export default function SCMProvidersPage() {
       return;
     }
     setTogglingId(p.id);
-    await updateScmProvider(p.id, { isActive: !p.isActive });
+    const result = await updateScmProvider(p.id, { isActive: !p.isActive });
+    if (!result) showMessage("error", "Failed to update provider status");
     await loadProviders();
     setTogglingId(null);
   };
@@ -128,8 +138,13 @@ export default function SCMProvidersPage() {
       setDeleteConfirmId(null);
       return;
     }
-    await deleteScmProvider(id);
+    const ok = await deleteScmProvider(id);
     setDeleteConfirmId(null);
+    if (ok) {
+      showMessage("success", "SCM provider removed");
+    } else {
+      showMessage("error", "Failed to remove SCM provider");
+    }
     if (browsingProviderId === id) {
       setBrowsingProviderId(null);
       setRepos([]);
@@ -170,6 +185,15 @@ export default function SCMProvidersPage() {
 
   return (
     <div className="space-y-8">
+      {message && (
+        <div className={`rounded-lg px-4 py-3 text-sm font-medium ${
+          message.type === "success"
+            ? "bg-emerald-400/10 text-emerald-400 border border-emerald-400/20"
+            : "bg-red-400/10 text-red-400 border border-red-400/20"
+        }`}>
+          {message.text}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold">SCM Providers</h2>

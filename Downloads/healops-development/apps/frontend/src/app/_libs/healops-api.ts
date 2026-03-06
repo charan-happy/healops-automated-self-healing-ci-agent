@@ -164,19 +164,14 @@ export async function createCheckoutSession(
   successUrl: string,
   cancelUrl: string,
 ): Promise<{ url: string } | null> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/billing/checkout`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ planSlug, successUrl, cancelUrl }),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<{ url: string }>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data } = await mutateApi<{ url: string }>(
+    "/v1/healops/billing/checkout",
+    "POST",
+    { planSlug, successUrl, cancelUrl },
+  );
+  return data;
 }
+
 
 // ─── Response types from GET /v1/healops/pipeline-status/:commitSha ─────────
 
@@ -282,6 +277,7 @@ export async function fetchPipelineStatus(
   try {
     const res = await fetch(
       `${BACKEND_URL}/v1/healops/pipeline-status/${commitSha}`,
+      { headers: authHeaders() },
     );
     if (res.status === 404) return null;
     if (!res.ok) return null;
@@ -301,20 +297,74 @@ import type {
   CostBreakdownItem,
 } from "./types/dashboard";
 
+// Try to refresh the access token using the stored refresh token
+async function tryRefreshToken(): Promise<boolean> {
+  try {
+    const refreshToken = typeof window !== "undefined"
+      ? localStorage.getItem("healops_refresh_token")
+      : null;
+    if (!refreshToken || refreshToken === "demo-refresh") return false;
+    const tokens = await refreshTokenApi(refreshToken);
+    setAccessToken(tokens.accessToken);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchApi<T>(path: string): Promise<T | null> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(`${BACKEND_URL}${path}`, {
       signal: controller.signal,
       headers: authHeaders(),
     });
     clearTimeout(timeoutId);
+    // Auto-refresh on 401 and retry once
+    if (res.status === 401) {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) {
+        const retry = await fetch(`${BACKEND_URL}${path}`, { headers: authHeaders() });
+        if (!retry.ok) return null;
+        const body = (await retry.json()) as ApiEnvelope<T>;
+        return body.data ?? null;
+      }
+      return null;
+    }
     if (!res.ok) return null;
     const body = (await res.json()) as ApiEnvelope<T>;
     return body.data ?? null;
   } catch {
     return null;
+  }
+}
+
+// Helper for mutating API calls (POST/PATCH/DELETE) with 401 auto-refresh
+async function mutateApi<T>(
+  path: string,
+  method: "POST" | "PATCH" | "DELETE",
+  body?: unknown,
+): Promise<{ data: T | null; status: number }> {
+  const opts: RequestInit = { method, headers: authHeaders() };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+
+  try {
+    let res = await fetch(`${BACKEND_URL}${path}`, opts);
+    // Auto-refresh on 401 and retry once
+    if (res.status === 401) {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) {
+        opts.headers = authHeaders();
+        res = await fetch(`${BACKEND_URL}${path}`, opts);
+      }
+    }
+    if (!res.ok) return { data: null, status: res.status };
+    if (method === "DELETE") return { data: null, status: res.status };
+    const envelope = (await res.json()) as ApiEnvelope<T>;
+    return { data: envelope.data ?? null, status: res.status };
+  } catch {
+    return { data: null, status: 0 };
   }
 }
 
@@ -356,18 +406,12 @@ export async function createOrganization(data: {
   name: string;
   slackWebhookUrl?: string;
 }): Promise<unknown> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/onboarding/organization`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<unknown>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<unknown>(
+    "/v1/healops/onboarding/organization",
+    "POST",
+    data,
+  );
+  return result;
 }
 
 export async function configureCiProvider(data: {
@@ -381,40 +425,23 @@ export async function configureCiProvider(data: {
   serverUrl?: string;
   scmProvider?: string;
 }): Promise<unknown> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/onboarding/ci-provider`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const errorBody = await res.json().catch(() => null);
-      console.error("[configureCiProvider] failed:", res.status, errorBody);
-      return null;
-    }
-    const body = (await res.json()) as ApiEnvelope<unknown>;
-    return body.data ?? null;
-  } catch (err) {
-    console.error("[configureCiProvider] error:", err);
-    return null;
-  }
+  const { data: result } = await mutateApi<unknown>(
+    "/v1/healops/onboarding/ci-provider",
+    "POST",
+    data,
+  );
+  return result;
 }
 
 export async function selectRepositories(data: {
   repositories: Array<{ externalRepoId: string; name: string; defaultBranch?: string }>;
 }): Promise<unknown> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/onboarding/repositories`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<unknown>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<unknown>(
+    "/v1/healops/onboarding/repositories",
+    "POST",
+    data,
+  );
+  return result;
 }
 
 export async function configureLlm(data: {
@@ -423,18 +450,12 @@ export async function configureLlm(data: {
   baseUrl?: string;
   model?: string;
 }): Promise<unknown> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/onboarding/llm-config`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<unknown>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<unknown>(
+    "/v1/healops/onboarding/llm-config",
+    "POST",
+    data,
+  );
+  return result;
 }
 
 // ─── Organization Settings API ──────────────────────────────────────────────
@@ -458,18 +479,12 @@ export async function updateOrganization(data: {
   name?: string;
   slackWebhookUrl?: string;
 }): Promise<Organization | null> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/organization`, {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<Organization>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<Organization>(
+    "/v1/healops/settings/organization",
+    "PATCH",
+    data,
+  );
+  return result;
 }
 
 export async function fetchMembers(): Promise<Member[] | null> {
@@ -480,37 +495,20 @@ export async function inviteMember(
   email: string,
   role = "member",
 ): Promise<Invitation | null> {
-  try {
-    const res = await fetch(
-      `${BACKEND_URL}/v1/healops/settings/organization/members/invite`,
-      {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ email, role }),
-      },
-    );
-    if (!res.ok) {
-      const errorBody = await res.json().catch(() => null);
-      console.error("[inviteMember] failed:", res.status, errorBody);
-      return null;
-    }
-    const body = (await res.json()) as ApiEnvelope<Invitation>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data } = await mutateApi<Invitation>(
+    "/v1/healops/settings/organization/members/invite",
+    "POST",
+    { email, role },
+  );
+  return data;
 }
 
 export async function removeMember(userId: string): Promise<boolean> {
-  try {
-    const res = await fetch(
-      `${BACKEND_URL}/v1/healops/settings/organization/members/${userId}`,
-      { method: "DELETE", headers: authHeaders() },
-    );
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const { status } = await mutateApi(
+    `/v1/healops/settings/organization/members/${userId}`,
+    "DELETE",
+  );
+  return status >= 200 && status < 300;
 }
 
 export async function fetchInvitations(): Promise<Invitation[] | null> {
@@ -520,15 +518,11 @@ export async function fetchInvitations(): Promise<Invitation[] | null> {
 }
 
 export async function revokeInvitation(id: string): Promise<boolean> {
-  try {
-    const res = await fetch(
-      `${BACKEND_URL}/v1/healops/settings/organization/invitations/${id}`,
-      { method: "DELETE", headers: authHeaders() },
-    );
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const { status } = await mutateApi(
+    `/v1/healops/settings/organization/invitations/${id}`,
+    "DELETE",
+  );
+  return status >= 200 && status < 300;
 }
 
 // ─── AI Config Settings API ─────────────────────────────────────────────────
@@ -550,18 +544,12 @@ export async function updateAiConfig(data: {
   baseUrl?: string;
   model?: string;
 }): Promise<unknown> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/ai-config`, {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<unknown>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<unknown>(
+    "/v1/healops/settings/ai-config",
+    "PATCH",
+    data,
+  );
+  return result;
 }
 
 // ─── Notification Settings API ──────────────────────────────────────────────
@@ -586,18 +574,12 @@ export async function updateNotificationSettings(data: {
   }>;
   events: string[];
 }): Promise<unknown> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/notifications`, {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<unknown>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<unknown>(
+    "/v1/healops/settings/notifications",
+    "PATCH",
+    data,
+  );
+  return result;
 }
 
 // ─── API Keys Settings API ──────────────────────────────────────────────────
@@ -623,47 +605,31 @@ export async function createApiKey(name: string): Promise<{
   prefix: string;
   id: string;
 } | null> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/api-keys`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ name }),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<{ key: string; prefix: string; id: string }>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data } = await mutateApi<{ key: string; prefix: string; id: string }>(
+    "/v1/healops/settings/api-keys",
+    "POST",
+    { name },
+  );
+  return data;
 }
 
 export async function deleteApiKey(id: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/api-keys/${id}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const { status } = await mutateApi(
+    `/v1/healops/settings/api-keys/${id}`,
+    "DELETE",
+  );
+  return status >= 200 && status < 300;
 }
 
 // ─── Billing Portal API ─────────────────────────────────────────────────────
 
 export async function createPortalSession(returnUrl: string): Promise<{ url: string } | null> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/billing/portal`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ returnUrl }),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<{ url: string }>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data } = await mutateApi<{ url: string }>(
+    "/v1/healops/billing/portal",
+    "POST",
+    { returnUrl },
+  );
+  return data;
 }
 
 // ─── CI Provider Settings API ────────────────────────────────────────────────
@@ -703,48 +669,32 @@ export async function fetchCiProviders(): Promise<CIProviderConfig[] | null> {
 export async function addCiProvider(
   data: CiProviderCreatePayload,
 ): Promise<{ providerConfigId: string; provider: string } | null> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/ci-providers`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<{ providerConfigId: string; provider: string }>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<{ providerConfigId: string; provider: string }>(
+    "/v1/healops/settings/ci-providers",
+    "POST",
+    data,
+  );
+  return result;
 }
 
 export async function updateCiProvider(
   id: string,
   data: CiProviderUpdatePayload,
 ): Promise<CIProviderConfig | null> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/ci-providers/${id}`, {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<CIProviderConfig>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<CIProviderConfig>(
+    `/v1/healops/settings/ci-providers/${id}`,
+    "PATCH",
+    data,
+  );
+  return result;
 }
 
 export async function deleteCiProvider(id: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/ci-providers/${id}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const { status } = await mutateApi(
+    `/v1/healops/settings/ci-providers/${id}`,
+    "DELETE",
+  );
+  return status >= 200 && status < 300;
 }
 
 export async function fetchAvailableRepos(
@@ -782,36 +732,24 @@ export async function fetchScmProviders(): Promise<SCMProviderConfig[] | null> {
 export async function addScmProvider(
   data: ScmProviderCreatePayload,
 ): Promise<{ providerConfigId: string; provider: string; installUrl?: string } | null> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/scm-providers`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<{ providerConfigId: string; provider: string; installUrl?: string }>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<{ providerConfigId: string; provider: string; installUrl?: string }>(
+    "/v1/healops/settings/scm-providers",
+    "POST",
+    data,
+  );
+  return result;
 }
 
 export async function updateScmProvider(
   id: string,
   data: ScmProviderUpdatePayload,
 ): Promise<SCMProviderConfig | null> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/scm-providers/${id}`, {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<SCMProviderConfig>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<SCMProviderConfig>(
+    `/v1/healops/settings/scm-providers/${id}`,
+    "PATCH",
+    data,
+  );
+  return result;
 }
 
 export interface ScmAvailableRepo {
@@ -832,15 +770,11 @@ export async function fetchScmAvailableRepos(
 }
 
 export async function deleteScmProvider(id: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/scm-providers/${id}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const { status } = await mutateApi(
+    `/v1/healops/settings/scm-providers/${id}`,
+    "DELETE",
+  );
+  return status >= 200 && status < 300;
 }
 
 // ─── Billing API ────────────────────────────────────────────────────────────
@@ -946,18 +880,12 @@ export async function addRepositoriesToOrg(
   providerType: "ci" | "scm",
   repositories: Array<{ externalRepoId: string; name: string; defaultBranch?: string }>,
 ): Promise<unknown> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/repositories`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ providerConfigId, providerType, repositories }),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<unknown>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data } = await mutateApi<unknown>(
+    "/v1/healops/projects/repositories",
+    "POST",
+    { providerConfigId, providerType, repositories },
+  );
+  return data;
 }
 
 // ─── Repository CI Links API ────────────────────────────────────────────────
@@ -981,18 +909,12 @@ export async function addRepoCiLink(
   ciProviderConfigId: string,
   pipelineName?: string,
 ): Promise<RepoCiLink | null> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/${repoId}/ci-links`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ ciProviderConfigId, pipelineName }),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<RepoCiLink>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data } = await mutateApi<RepoCiLink>(
+    `/v1/healops/projects/${repoId}/ci-links`,
+    "POST",
+    { ciProviderConfigId, pipelineName },
+  );
+  return data;
 }
 
 export async function updateRepoCiLink(
@@ -1000,30 +922,20 @@ export async function updateRepoCiLink(
   linkId: string,
   data: { pipelineName?: string; isActive?: boolean },
 ): Promise<unknown> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/${repoId}/ci-links/${linkId}`, {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as ApiEnvelope<unknown>;
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
+  const { data: result } = await mutateApi<unknown>(
+    `/v1/healops/projects/${repoId}/ci-links/${linkId}`,
+    "PATCH",
+    data,
+  );
+  return result;
 }
 
 export async function removeRepoCiLink(repoId: string, linkId: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/${repoId}/ci-links/${linkId}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const { status } = await mutateApi(
+    `/v1/healops/projects/${repoId}/ci-links/${linkId}`,
+    "DELETE",
+  );
+  return status >= 200 && status < 300;
 }
 
 // ─── Public Reviews API ─────────────────────────────────────────────────────
@@ -1087,14 +999,10 @@ export async function submitReview(data: {
   title: string;
   comment: string;
 }): Promise<boolean> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/v1/healops/reviews`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const { status } = await mutateApi(
+    "/v1/healops/reviews",
+    "POST",
+    data,
+  );
+  return status >= 200 && status < 300;
 }
