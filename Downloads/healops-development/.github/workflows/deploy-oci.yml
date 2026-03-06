@@ -1,0 +1,89 @@
+name: Deploy to OCI (PM2)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'Infrastructure/**'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy to OCI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build backend
+        run: pnpm --filter backend run build
+
+      - name: Build frontend
+        run: pnpm --filter frontend run build
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.OCI_SSH_KEY }}" > ~/.ssh/oci_key
+          chmod 600 ~/.ssh/oci_key
+          ssh-keyscan -p ${{ secrets.OCI_SSH_PORT }} ${{ secrets.OCI_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy backend
+        run: |
+          rsync -avz --delete \
+            -e "ssh -p ${{ secrets.OCI_SSH_PORT }} -i ~/.ssh/oci_key" \
+            apps/backend/dist/ \
+            ubuntu@${{ secrets.OCI_HOST }}:~/healops/apps/backend/dist/
+
+      - name: Deploy frontend
+        run: |
+          rsync -avz --delete \
+            -e "ssh -p ${{ secrets.OCI_SSH_PORT }} -i ~/.ssh/oci_key" \
+            apps/frontend/.next/ \
+            ubuntu@${{ secrets.OCI_HOST }}:~/healops/apps/frontend/.next/
+
+      - name: Restart PM2 services
+        run: |
+          ssh -p ${{ secrets.OCI_SSH_PORT }} -i ~/.ssh/oci_key ubuntu@${{ secrets.OCI_HOST }} << 'DEPLOY_SCRIPT'
+            export FNM_PATH="$HOME/.local/share/fnm"
+            export PATH="$FNM_PATH:$PATH"
+            eval "$(fnm env)"
+            cd ~/healops
+
+            # Restart backend and frontend
+            pm2 restart healops-backend healops-frontend --update-env
+
+            # Wait for backend to be ready
+            sleep 10
+
+            # Health check
+            if curl -sf http://localhost:4000/health > /dev/null 2>&1; then
+              echo "Backend health check passed"
+            else
+              echo "Backend health check failed"
+              pm2 logs healops-backend --lines 20 --nostream
+              exit 1
+            fi
+
+            echo "Deployment successful"
+            pm2 status
+          DEPLOY_SCRIPT
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/oci_key
