@@ -39,7 +39,7 @@ export class GitHubCiProvider extends CiProviderBase {
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-      timeout: 30_000,
+      timeout: 10_000,
     });
   }
 
@@ -57,7 +57,7 @@ export class GitHubCiProvider extends CiProviderBase {
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-      timeout: 30_000,
+      timeout: 10_000,
     });
 
     const repos: ProviderRepository[] = [];

@@ -39,7 +39,7 @@ export class GitLabCiProvider extends CiProviderBase {
         'PRIVATE-TOKEN': config.authToken,
         'Content-Type': 'application/json',
       },
-      timeout: 30_000,
+      timeout: 10_000,
     });
   }
 
@@ -61,7 +61,7 @@ export class GitLabCiProvider extends CiProviderBase {
     const client = axios.create({
       baseURL: `${baseURL}/api/v4`,
       headers: { 'PRIVATE-TOKEN': authToken, 'Content-Type': 'application/json' },
-      timeout: 30_000,
+      timeout: 10_000,
     });
 
     const repos: ProviderRepository[] = [];

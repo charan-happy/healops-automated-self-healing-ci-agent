@@ -46,7 +46,7 @@ export class JenkinsCiProvider extends CiProviderBase {
       headers: {
         Accept: 'application/json',
       },
-      timeout: 30_000,
+      timeout: 10_000,
     });
   }
 
@@ -320,7 +320,7 @@ export class JenkinsCiProvider extends CiProviderBase {
       baseURL,
       auth: { username: username ?? '', password: apiToken ?? '' },
       headers: { Accept: 'application/json' },
-      timeout: 30_000,
+      timeout: 10_000,
     });
 
     try {

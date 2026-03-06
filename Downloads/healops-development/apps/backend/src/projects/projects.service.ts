@@ -215,8 +215,9 @@ export class ProjectsService {
       }
 
       // Use custom pipelineName from the link, or derive from repo
-      const pipelineName = link.pipelineName
-        ?? this.deriveRepoIdentifier(config.providerType, repo.externalRepoId, parts);
+      const pipelineName = (link.pipelineName && link.pipelineName.trim())
+        ? link.pipelineName
+        : this.deriveRepoIdentifier(config.providerType, repo.externalRepoId, parts);
 
       this.logger.debug(`CI link: querying ${config.providerType} with repo="${pipelineName}"`);
       queries.push(

@@ -778,6 +778,7 @@ const ProjectsPage = () => {
             name: r.name,
             repo: r.repo,
             branchCount: r.branchCount,
+            defaultBranch: r.defaultBranch,
             lastActivity: r.lastActivity ?? "\u2014",
             provider: r.provider,
           };
@@ -828,7 +829,7 @@ const ProjectsPage = () => {
         const data = await fetchProjectBranches(backendId);
         if (data) {
           const mapped: Branch[] = data.map((b: BranchResponse) => ({
-            id: b.name,
+            id: b.id,
             name: b.name,
             author: b.author,
             commitCount: b.commitCount,
@@ -991,11 +992,29 @@ const ProjectsPage = () => {
                           );
                         })()}
                       </div>
-                      <p className="text-sm text-muted-foreground font-medium">{project.repo}</p>
+                      <p className="text-xs text-muted-foreground/70 font-medium mt-0.5">{project.repo}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-6">
-                    <span className="text-sm text-muted-foreground">{project.lastActivity}</span>
+                  <div className="flex items-center gap-4">
+                    {/* Quick stats */}
+                    <div className="hidden sm:flex items-center gap-4 mr-2">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Branches">
+                        <GitBranch size={13} className="text-brand-cyan/60" />
+                        <span className="font-semibold text-foreground/80">{project.branchCount}</span>
+                      </div>
+                      {project.defaultBranch && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Default branch">
+                          <GitCommit size={13} className="text-green-400/60" />
+                          <span className="font-mono text-foreground/70">{project.defaultBranch}</span>
+                        </div>
+                      )}
+                      {project.lastActivity && project.lastActivity !== "\u2014" && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Last activity">
+                          <Clock size={13} className="text-yellow-400/60" />
+                          <span className="text-foreground/70">{new Date(project.lastActivity).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                    </div>
                     <ChevronDown
                       size={16}
                       className={`text-muted-foreground transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
