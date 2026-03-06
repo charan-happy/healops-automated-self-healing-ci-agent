@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EnvConfig } from '@config/env.config';
 import { HashingService } from '@common/hashing/hashing.service';
 import { BcryptService } from '@common/hashing/bcrypt.service';
+import { MetricsModule } from '@metrics/metrics.module';
 
 // Controller
 import { AuthController } from './auth.controller';
@@ -30,6 +31,7 @@ import { ApiKeyGuard } from './guards/api-key.guard';
 
 @Module({
   imports: [
+    MetricsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

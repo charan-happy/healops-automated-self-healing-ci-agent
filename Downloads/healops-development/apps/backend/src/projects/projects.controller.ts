@@ -128,6 +128,19 @@ export class ProjectsController {
     );
   }
 
+  // ─── CI Provider Jobs (auto-fetch) ─────────────────────────────────────
+
+  @Get('ci-providers/:configId/jobs')
+  @ApiOperation({ summary: 'List available jobs/pipelines from a CI provider' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Returns available jobs' })
+  async listCiProviderJobs(
+    @CurrentUser() user: AuthUser,
+    @Param('configId') configId: string,
+  ) {
+    const orgId = await this.resolveOrganizationId(user.id);
+    return this.projectsService.listCiProviderJobs(configId, orgId);
+  }
+
   // ─── CI Provider Links ──────────────────────────────────────────────────
 
   @Get(':repositoryId/ci-links')

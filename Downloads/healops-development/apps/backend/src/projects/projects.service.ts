@@ -199,6 +199,8 @@ export class ProjectsService {
 
     // ─── 1) Explicit CI links (repository_ci_links table) ──────────────
     const ciLinks = await this.platformRepository.findCiLinksByRepository(repositoryId);
+    this.logger.debug(`Pipeline fetch for ${repo.name}: ${ciLinks.length} explicit CI links found`);
+
     for (const link of ciLinks) {
       if (!link.isActive) continue;
       const config = await this.ciProviderConfigsRepository.findConfigById(link.ciProviderConfigId);
@@ -207,12 +209,16 @@ export class ProjectsService {
       coveredConfigIds.add(config.id);
       const configData = (config.config as Record<string, string>) ?? {};
       const authToken = configData['accessToken'] ?? configData['authToken'] ?? '';
-      if (!authToken) continue;
+      if (!authToken) {
+        this.logger.warn(`CI link ${link.id}: no auth token found for provider ${config.providerType}`);
+        continue;
+      }
 
       // Use custom pipelineName from the link, or derive from repo
       const pipelineName = link.pipelineName
         ?? this.deriveRepoIdentifier(config.providerType, repo.externalRepoId, parts);
 
+      this.logger.debug(`CI link: querying ${config.providerType} with repo="${pipelineName}"`);
       queries.push(
         this.fetchPipelinesFromProvider(config.providerType, {
           owner: parts[0] ?? '',
@@ -231,6 +237,7 @@ export class ProjectsService {
       const authToken = configData['accessToken'] ?? '';
       if (authToken) {
         const repoIdentifier = this.deriveRepoIdentifier(repoProvider, repo.externalRepoId, parts);
+        this.logger.debug(`SCM-native CI: querying ${repoProvider} with repo="${repoIdentifier}"`);
         queries.push(
           this.fetchPipelinesFromProvider(repoProvider, {
             owner: parts[0] ?? '',
@@ -239,6 +246,8 @@ export class ProjectsService {
             serverUrl: configData['serverUrl'],
           }, repo.name, limit),
         );
+      } else {
+        this.logger.warn(`SCM config for ${repoProvider}: no access token`);
       }
     }
 
@@ -246,6 +255,7 @@ export class ProjectsService {
     if (ciLinks.length === 0) {
       // No explicit links — fall back to querying ALL org-level CI configs
       const ciConfigs = await this.ciProviderConfigsRepository.findConfigsByOrganization(organizationId);
+      this.logger.debug(`No explicit CI links — falling back to ${ciConfigs.length} org-level CI configs`);
       for (const ciConfig of ciConfigs) {
         if (!ciConfig.isActive) continue;
         if (ciConfig.providerType === repoProvider && scmConfig) continue;
@@ -255,6 +265,7 @@ export class ProjectsService {
         if (!authToken) continue;
 
         const repoIdentifier = this.deriveRepoIdentifier(ciConfig.providerType, repo.externalRepoId, parts);
+        this.logger.debug(`Org CI fallback: querying ${ciConfig.providerType} with repo="${repoIdentifier}"`);
         queries.push(
           this.fetchPipelinesFromProvider(ciConfig.providerType, {
             owner: parts[0] ?? '',
@@ -266,10 +277,22 @@ export class ProjectsService {
       }
     }
 
-    if (queries.length === 0) return [];
+    if (queries.length === 0) {
+      this.logger.debug(`Pipeline fetch for ${repo.name}: no queries to run`);
+      return [];
+    }
 
-    const results = await Promise.all(queries);
-    const allRuns = results.flat();
+    this.logger.debug(`Pipeline fetch for ${repo.name}: running ${queries.length} queries`);
+    const results = await Promise.allSettled(queries);
+    const allRuns: PipelineRun[] = [];
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        allRuns.push(...result.value);
+      } else {
+        this.logger.warn(`Pipeline query failed: ${result.reason}`);
+      }
+    }
+    this.logger.debug(`Pipeline fetch for ${repo.name}: ${allRuns.length} total runs found`);
 
     allRuns.sort((a, b) => {
       const timeA = a.startedAt ? new Date(a.startedAt).getTime() : 0;
@@ -301,6 +324,24 @@ export class ProjectsService {
       this.logger.warn(`Failed to fetch ${providerType} pipelines for ${repoFullName}: ${(err as Error).message}`);
       return [];
     }
+  }
+
+  // ─── CI Provider Job Discovery ──────────────────────────────────────────
+
+  async listCiProviderJobs(ciProviderConfigId: string, organizationId: string) {
+    const config = await this.ciProviderConfigsRepository.findConfigById(ciProviderConfigId);
+    if (!config || config.organizationId !== organizationId) {
+      throw new NotFoundException('CI provider config not found');
+    }
+
+    const configData = (config.config as Record<string, string>) ?? {};
+    const authToken = configData['accessToken'] ?? configData['authToken'] ?? '';
+    if (!authToken) {
+      return [];
+    }
+
+    const provider = this.ciProviderFactory.getProvider(config.providerType);
+    return provider.listJobs(authToken, configData['serverUrl']);
   }
 
   // ─── CI Link Management ──────────────────────────────────────────────────
@@ -415,8 +456,9 @@ export class ProjectsService {
         repoName,
       );
 
+      const upsertedBranches: Array<{ id: string; name: string }> = [];
       for (const remoteBranch of remoteBranches) {
-        await this.platformRepository.upsertBranch({
+        const branch = await this.platformRepository.upsertBranch({
           repositoryId: repo.id,
           name: remoteBranch.name,
           isDefault: remoteBranch.name === (repo.defaultBranch ?? 'main'),
@@ -425,10 +467,19 @@ export class ProjectsService {
             remoteBranch.name.startsWith('healops/fix/') ||
             remoteBranch.name.startsWith('agent-fix/'),
         });
+        if (branch) upsertedBranches.push(branch);
       }
 
+      // Sync recent commits for each branch (parallel, max 5 at a time)
+      const commitSyncPromises = upsertedBranches.map((branch) =>
+        this.syncCommitsFromGitHub(repo, branch, 10).catch((err) => {
+          this.logger.warn(`Failed to sync commits for branch ${branch.name}: ${(err as Error).message}`);
+        }),
+      );
+      await Promise.allSettled(commitSyncPromises);
+
       this.logger.log(
-        `Synced ${remoteBranches.length} branches for ${repo.name}`,
+        `Synced ${remoteBranches.length} branches (with commits) for ${repo.name}`,
       );
     } catch (error) {
       this.logger.warn(
@@ -470,8 +521,9 @@ export class ProjectsService {
         commit?: { author_name?: string; committed_date?: string };
       }>;
 
+      const upsertedBranches: Array<{ id: string; name: string }> = [];
       for (const branch of branches) {
-        await this.platformRepository.upsertBranch({
+        const upserted = await this.platformRepository.upsertBranch({
           repositoryId: repo.id,
           name: branch.name,
           isDefault: branch.name === (repo.defaultBranch ?? 'main'),
@@ -480,9 +532,18 @@ export class ProjectsService {
             branch.name.startsWith('healops/fix/') ||
             branch.name.startsWith('agent-fix/'),
         });
+        if (upserted) upsertedBranches.push(upserted);
       }
 
-      this.logger.log(`Synced ${branches.length} GitLab branches for ${repo.name}`);
+      // Sync recent commits for each branch in parallel
+      const commitSyncPromises = upsertedBranches.map((branch) =>
+        this.syncCommitsFromGitLab(repo, branch, organizationId, 10).catch((err) => {
+          this.logger.warn(`Failed to sync commits for branch ${branch.name}: ${(err as Error).message}`);
+        }),
+      );
+      await Promise.allSettled(commitSyncPromises);
+
+      this.logger.log(`Synced ${branches.length} GitLab branches (with commits) for ${repo.name}`);
     } catch (error) {
       this.logger.warn(
         `Failed to sync branches from GitLab for ${repo.name}: ${(error as Error).message}`,

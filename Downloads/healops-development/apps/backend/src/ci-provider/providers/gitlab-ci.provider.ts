@@ -14,6 +14,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderJob,
   ProviderPipelineRun,
   ProviderRepository,
   WebhookPayloadResult,
@@ -103,6 +104,20 @@ export class GitLabCiProvider extends CiProviderBase {
     }
 
     return repos;
+  }
+
+  // ─── Job Discovery ──────────────────────────────────────────────────────
+
+  override async listJobs(
+    authToken: string,
+    serverUrl?: string,
+  ): Promise<ProviderJob[]> {
+    const repos = await this.listRepositories(authToken, serverUrl);
+    return repos.map((r) => ({
+      id: r.externalRepoId,
+      name: r.fullName,
+      url: r.url,
+    }));
   }
 
   // ─── Webhook ──────────────────────────────────────────────────────────────

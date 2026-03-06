@@ -14,10 +14,11 @@ import {
   fetchCiProviders, fetchScmProviders, fetchAvailableRepos,
   fetchScmAvailableRepos, addRepositoriesToOrg, isDemoMode,
   fetchRepoCiLinks, addRepoCiLink, updateRepoCiLink, removeRepoCiLink,
+  fetchCiProviderJobs,
 } from "../_libs/healops-api";
 import type {
   ProjectResponse, BranchResponse, ProviderPipelineRun,
-  AvailableRepo, ScmAvailableRepo, RepoCiLink,
+  AvailableRepo, ScmAvailableRepo, RepoCiLink, ProviderJob,
 } from "../_libs/healops-api";
 import { mockProjects, mockBranches } from "../_libs/mockData";
 import type { Project, Branch } from "../_libs/mockData";
@@ -447,6 +448,11 @@ function CiLinksTab({ repositoryId }: { repositoryId: string }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPipelineName, setEditPipelineName] = useState("");
 
+  // Auto-fetched jobs from selected CI provider
+  const [jobs, setJobs] = useState<ProviderJob[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+  const [useCustomName, setUseCustomName] = useState(false);
+
   const loadLinks = useCallback(() => {
     setLoading(true);
     fetchRepoCiLinks(repositoryId)
@@ -461,6 +467,8 @@ function CiLinksTab({ repositoryId }: { repositoryId: string }) {
     setShowAdd(true);
     setSelectedProviderId("");
     setPipelineName("");
+    setJobs([]);
+    setUseCustomName(false);
     setLoadingProviders(true);
     fetchCiProviders()
       .then((data) => {
@@ -476,6 +484,22 @@ function CiLinksTab({ repositoryId }: { repositoryId: string }) {
       })
       .catch(() => setProviders([]))
       .finally(() => setLoadingProviders(false));
+  }, []);
+
+  // When a CI provider is selected, auto-fetch its jobs
+  const handleProviderSelect = useCallback((configId: string) => {
+    setSelectedProviderId(configId);
+    setPipelineName("");
+    setUseCustomName(false);
+    if (!configId) {
+      setJobs([]);
+      return;
+    }
+    setLoadingJobs(true);
+    fetchCiProviderJobs(configId)
+      .then((data) => setJobs(data ?? []))
+      .catch(() => setJobs([]))
+      .finally(() => setLoadingJobs(false));
   }, []);
 
   const handleAdd = async () => {
@@ -606,7 +630,7 @@ function CiLinksTab({ repositoryId }: { repositoryId: string }) {
             <>
               <select
                 value={selectedProviderId}
-                onChange={(e) => setSelectedProviderId(e.target.value)}
+                onChange={(e) => handleProviderSelect(e.target.value)}
                 className="w-full rounded-lg border border-border/40 bg-card/60 px-3 py-2 text-sm focus:outline-none focus:border-brand-cyan/40"
               >
                 <option value="">Select a CI provider...</option>
@@ -616,13 +640,69 @@ function CiLinksTab({ repositoryId }: { repositoryId: string }) {
                   </option>
                 ))}
               </select>
-              <input
-                type="text"
-                value={pipelineName}
-                onChange={(e) => setPipelineName(e.target.value)}
-                placeholder="Pipeline/job name (optional — e.g. my-jenkins-job)"
-                className="w-full rounded-lg border border-border/40 bg-card/60 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-brand-cyan/40"
-              />
+
+              {/* Job/Pipeline selector — auto-fetched from provider */}
+              {selectedProviderId && (
+                <>
+                  {loadingJobs ? (
+                    <div className="flex items-center gap-2 py-2">
+                      <Loader2 className="animate-spin text-brand-cyan" size={14} />
+                      <span className="text-xs text-muted-foreground">Fetching available jobs/pipelines...</span>
+                    </div>
+                  ) : useCustomName ? (
+                    <div className="space-y-1">
+                      <input
+                        type="text"
+                        value={pipelineName}
+                        onChange={(e) => setPipelineName(e.target.value)}
+                        placeholder="Enter custom pipeline/job name"
+                        className="w-full rounded-lg border border-border/40 bg-card/60 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-brand-cyan/40"
+                      />
+                      {jobs.length > 0 && (
+                        <button
+                          onClick={() => { setUseCustomName(false); setPipelineName(""); }}
+                          className="text-xs text-brand-cyan hover:underline"
+                        >
+                          Back to job list
+                        </button>
+                      )}
+                    </div>
+                  ) : jobs.length > 0 ? (
+                    <div className="space-y-1">
+                      <select
+                        value={pipelineName}
+                        onChange={(e) => setPipelineName(e.target.value)}
+                        className="w-full rounded-lg border border-border/40 bg-card/60 px-3 py-2 text-sm focus:outline-none focus:border-brand-cyan/40"
+                      >
+                        <option value="">Select a job/pipeline...</option>
+                        {jobs.map((j) => (
+                          <option key={j.id} value={j.id}>
+                            {j.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => setUseCustomName(true)}
+                        className="text-xs text-muted-foreground hover:text-brand-cyan"
+                      >
+                        Or enter a custom name
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">No jobs found. Enter a custom name instead:</p>
+                      <input
+                        type="text"
+                        value={pipelineName}
+                        onChange={(e) => setPipelineName(e.target.value)}
+                        placeholder="Pipeline/job name"
+                        className="w-full rounded-lg border border-border/40 bg-card/60 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-brand-cyan/40"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleAdd}

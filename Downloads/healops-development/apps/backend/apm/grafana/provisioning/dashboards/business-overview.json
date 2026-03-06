@@ -416,6 +416,142 @@
           }
         }
       }
+    },
+    {
+      "title": "User Activity",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "collapsed": false
+    },
+    {
+      "title": "Total Logins",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 37 },
+      "targets": [
+        {
+          "expr": "sum(healops_user_logins_total) or vector(0)",
+          "legendFormat": "Logins",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [{ "color": "blue", "value": null }]
+          }
+        }
+      }
+    },
+    {
+      "title": "Total Registrations",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 37 },
+      "targets": [
+        {
+          "expr": "sum(healops_user_registrations_total) or vector(0)",
+          "legendFormat": "Registrations",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      }
+    },
+    {
+      "title": "Active Users (5m)",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 37 },
+      "targets": [
+        {
+          "expr": "active_users_gauge or vector(0)",
+          "legendFormat": "Active",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "green", "value": 5 },
+              { "color": "yellow", "value": 50 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Logins by Method",
+      "type": "piechart",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 37 },
+      "targets": [
+        {
+          "expr": "sum by(method) (healops_user_logins_total)",
+          "legendFormat": "{{method}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "User Logins Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 43 },
+      "targets": [
+        {
+          "expr": "sum(increase(healops_user_logins_total[1h]))",
+          "legendFormat": "Logins / hr",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(healops_user_registrations_total[1h]))",
+          "legendFormat": "Registrations / hr",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } }
+        }
+      },
+      "overrides": [
+        {
+          "matcher": { "id": "byName", "options": "Logins / hr" },
+          "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }]
+        },
+        {
+          "matcher": { "id": "byName", "options": "Registrations / hr" },
+          "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+        }
+      ]
+    },
+    {
+      "title": "Active Users Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 43 },
+      "targets": [
+        {
+          "expr": "active_users_gauge or vector(0)",
+          "legendFormat": "Active Users",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2 }
+        }
+      },
+      "overrides": [
+        {
+          "matcher": { "id": "byName", "options": "Active Users" },
+          "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }]
+        }
+      ]
     }
   ],
   "refresh": "30s",

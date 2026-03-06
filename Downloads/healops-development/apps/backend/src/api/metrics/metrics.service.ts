@@ -14,6 +14,8 @@ export class MetricsService {
   private readonly refererCounter: Counter<string>;
   private readonly totalMobileRequests: Counter<string>;
   private readonly totalWebRequests: Counter<string>;
+  private readonly userLoginsTotal: Counter<string>;
+  private readonly userRegistrationsTotal: Counter<string>;
 
   constructor() {
     this.totalHttpRequests = new Counter({
@@ -73,6 +75,17 @@ export class MetricsService {
       help: 'Total requests grouped by Web',
       labelNames: ['web_request'],
     });
+
+    this.userLoginsTotal = new Counter({
+      name: 'healops_user_logins_total',
+      help: 'Total successful user logins',
+      labelNames: ['method'],
+    });
+
+    this.userRegistrationsTotal = new Counter({
+      name: 'healops_user_registrations_total',
+      help: 'Total user registrations',
+    });
   }
 
   incrementHttpRequests() {
@@ -126,5 +139,13 @@ export class MetricsService {
   incrementMobileWebReqCounter(isMobile: boolean) {
     if (isMobile) this.totalMobileRequests.inc();
     else this.totalWebRequests.inc();
+  }
+
+  incrementLoginCounter(method: 'email' | 'google' | 'github') {
+    this.userLoginsTotal.labels(method).inc();
+  }
+
+  incrementRegistrationCounter() {
+    this.userRegistrationsTotal.inc();
   }
 }

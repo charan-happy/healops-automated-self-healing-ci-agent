@@ -84,6 +84,16 @@ export interface ProviderPipelineRun {
   provider: string;
 }
 
+/** Result of listing available jobs/workflows/pipelines from a CI provider */
+export interface ProviderJob {
+  /** Unique identifier (job name for Jenkins, workflow file for GitHub, project ID for GitLab) */
+  id: string;
+  /** Human-readable display name */
+  name: string;
+  /** Link to the job/workflow in the provider UI */
+  url?: string;
+}
+
 /** Result of creating a pull request / merge request */
 export interface CreatePrResult {
   number: number;

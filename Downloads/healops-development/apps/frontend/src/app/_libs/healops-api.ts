@@ -900,6 +900,16 @@ export interface RepoCiLink {
   createdAt: string;
 }
 
+export interface ProviderJob {
+  id: string;
+  name: string;
+  url?: string;
+}
+
+export async function fetchCiProviderJobs(configId: string): Promise<ProviderJob[] | null> {
+  return fetchApi<ProviderJob[]>(`/v1/healops/projects/ci-providers/${configId}/jobs`);
+}
+
 export async function fetchRepoCiLinks(repoId: string): Promise<RepoCiLink[] | null> {
   return fetchApi<RepoCiLink[]>(`/v1/healops/projects/${repoId}/ci-links`);
 }

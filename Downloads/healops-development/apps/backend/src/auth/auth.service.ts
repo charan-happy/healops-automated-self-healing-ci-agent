@@ -15,6 +15,7 @@ import { AuthRepository } from '@db/repositories/auth/auth.repository';
 import { VerificationTokenRepository } from '@db/repositories/auth/verification-token.repository';
 import { PasswordResetTokenRepository } from '@db/repositories/auth/password-reset-token.repository';
 import { EmailService } from '@email/email.service';
+import { MetricsService } from '@metrics/metrics.service';
 import { TokenResponse } from './interfaces/token-response.interface';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -33,6 +34,7 @@ export class AuthService {
     private readonly verificationTokenRepository: VerificationTokenRepository,
     private readonly passwordResetTokenRepository: PasswordResetTokenRepository,
     private readonly emailService: EmailService,
+    private readonly metricsService: MetricsService,
   ) {}
 
   /**
@@ -82,6 +84,8 @@ export class AuthService {
 
     const authUser = await this.authRepository.getUserWithRolesAndPermissions(userId);
 
+    this.metricsService.incrementRegistrationCounter();
+    this.metricsService.incrementLoginCounter('email');
     return this.tokenService.generateTokens(authUser);
   }
 
@@ -112,6 +116,7 @@ export class AuthService {
     const authUser = await this.authRepository.getUserWithRolesAndPermissions(user.id);
     const tokens = await this.tokenService.generateTokens(authUser);
 
+    this.metricsService.incrementLoginCounter('email');
     return {
       ...tokens,
       isEmailVerified: user.isEmailVerified,
@@ -188,6 +193,8 @@ export class AuthService {
     refreshToken?: string;
   }): Promise<TokenResponse> {
     const authUser = await this.oauthService.findOrCreateOAuthUser(profile);
+    const method = profile.provider === 'google' ? 'google' : 'github';
+    this.metricsService.incrementLoginCounter(method);
     return this.tokenService.generateTokens(authUser);
   }
 

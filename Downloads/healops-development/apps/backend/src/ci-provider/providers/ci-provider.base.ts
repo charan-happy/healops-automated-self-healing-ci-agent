@@ -7,6 +7,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderJob,
   ProviderPipelineRun,
   ProviderRepository,
   WebhookPayloadResult,
@@ -77,6 +78,19 @@ export abstract class CiProviderBase {
     repoFullName: string,
     limit: number,
   ): Promise<ProviderPipelineRun[]>;
+
+  // ─── Job / Workflow Discovery ─────────────────────────────────────────────
+
+  /**
+   * List available jobs/workflows/pipelines from the CI provider.
+   * Used to auto-populate the job selector when linking a CI provider to a repo.
+   * @param authToken - Pre-resolved auth token
+   * @param serverUrl - Optional base URL for self-hosted instances
+   */
+  abstract listJobs(
+    authToken: string,
+    serverUrl?: string,
+  ): Promise<ProviderJob[]>;
 
   // ─── SCM Operations ─────────────────────────────────────────────────────────
 

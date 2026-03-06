@@ -12,6 +12,7 @@ import {
   CiConnectionConfig,
   CreateIssueResult,
   CreatePrResult,
+  ProviderJob,
   ProviderPipelineRun,
   ProviderRepository,
   WebhookPayloadResult,
@@ -305,6 +306,62 @@ export class JenkinsCiProvider extends CiProviderBase {
       default:
         return 'unknown';
     }
+  }
+
+  // ─── Job Discovery ──────────────────────────────────────────────────────
+
+  override async listJobs(
+    authToken: string,
+    serverUrl?: string,
+  ): Promise<ProviderJob[]> {
+    const baseURL = serverUrl ?? 'http://localhost:8080';
+    const [username, apiToken] = authToken.split(':');
+    const client = axios.create({
+      baseURL,
+      auth: { username: username ?? '', password: apiToken ?? '' },
+      headers: { Accept: 'application/json' },
+      timeout: 30_000,
+    });
+
+    try {
+      return await this.fetchJenkinsJobs(client, baseURL, '', 0);
+    } catch (error) {
+      this.logger.error(`Failed to list Jenkins jobs: ${(error as Error).message}`);
+      return [];
+    }
+  }
+
+  private async fetchJenkinsJobs(
+    client: AxiosInstance,
+    baseURL: string,
+    prefix: string,
+    depth: number,
+  ): Promise<ProviderJob[]> {
+    const url = prefix
+      ? `${prefix}/api/json`
+      : '/api/json';
+    const response = await client.get(url, {
+      params: { tree: 'jobs[name,url,color,_class]' },
+    });
+    const data = response.data as Record<string, unknown>;
+    const jobs = (data['jobs'] as Array<Record<string, unknown>>) ?? [];
+    const result: ProviderJob[] = [];
+
+    for (const job of jobs) {
+      const cls = String(job['_class'] ?? '');
+      const name = String(job['name'] ?? '');
+      const jobUrl = String(job['url'] ?? '');
+      const fullName = prefix ? `${prefix.replace(/^\/job\//, '').replace(/\/job\//g, '/')}/${name}` : name;
+
+      // Recurse into folders (max 2 levels deep)
+      if ((cls.includes('Folder') || cls.includes('OrganizationFolder')) && depth < 2) {
+        const subJobs = await this.fetchJenkinsJobs(client, baseURL, `/job/${encodeURIComponent(name)}`, depth + 1);
+        result.push(...subJobs);
+      } else if (!cls.includes('Folder')) {
+        result.push({ id: fullName, name: fullName, url: jobUrl });
+      }
+    }
+    return result;
   }
 
   // ─── Repository Discovery (Not Supported) ────────────────────────────────
