@@ -17,6 +17,9 @@ export class MetricsService {
   private readonly userLoginsTotal: Counter<string>;
   private readonly userRegistrationsTotal: Counter<string>;
 
+  // Sliding window: userId → last seen timestamp (5-minute window)
+  private readonly activeUserMap = new Map<string, number>();
+
   constructor() {
     this.totalHttpRequests = new Counter({
       name: 'total_http_requests',
@@ -86,6 +89,15 @@ export class MetricsService {
       name: 'healops_user_registrations_total',
       help: 'Total user registrations',
     });
+
+    // Periodically clean stale entries and update gauge (every 30s)
+    setInterval(() => {
+      const cutoff = Date.now() - 5 * 60 * 1000; // 5-minute window
+      for (const [userId, lastSeen] of this.activeUserMap) {
+        if (lastSeen < cutoff) this.activeUserMap.delete(userId);
+      }
+      this.activeUsersGauge.set(this.activeUserMap.size);
+    }, 30_000);
   }
 
   incrementHttpRequests() {
@@ -139,6 +151,11 @@ export class MetricsService {
   incrementMobileWebReqCounter(isMobile: boolean) {
     if (isMobile) this.totalMobileRequests.inc();
     else this.totalWebRequests.inc();
+  }
+
+  trackActiveUser(userId: string) {
+    this.activeUserMap.set(userId, Date.now());
+    this.activeUsersGauge.set(this.activeUserMap.size);
   }
 
   incrementLoginCounter(method: 'email' | 'google' | 'github') {

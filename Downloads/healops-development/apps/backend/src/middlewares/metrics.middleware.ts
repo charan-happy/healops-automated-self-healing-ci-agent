@@ -34,6 +34,12 @@ export class MetricsMiddleware implements NestMiddleware {
 
       this.metricsService.decrementConcurrentRequests();
 
+      // Track active user from authenticated request
+      const user = (req as unknown as Record<string, unknown>)['user'] as { id?: string } | undefined;
+      if (user?.id) {
+        this.metricsService.trackActiveUser(user.id);
+      }
+
       // ✅ Save all metrics
       this.metricsService.observeRequestDuration(
         method,
