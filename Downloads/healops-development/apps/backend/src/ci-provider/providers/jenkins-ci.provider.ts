@@ -289,7 +289,7 @@ export class JenkinsCiProvider extends CiProviderBase {
         `/job/${encodeURIComponent(jobName)}/api/json`,
         {
           params: {
-            tree: `builds[number,result,timestamp,duration,url,actions[lastBuiltRevision[SHA1,branch[name]]]]`,
+            tree: `builds[number,result,timestamp,duration,url,description,actions[lastBuiltRevision[SHA1,branch[name]],causes[shortDescription,userId,userName],lastBuiltRevision[SHA1,branch[name]]],changeSet[items[msg,author[fullName]]]]`,
           },
         },
       );
@@ -301,13 +301,31 @@ export class JenkinsCiProvider extends CiProviderBase {
         const actions = (build['actions'] as Record<string, unknown>[]) ?? [];
         let commitSha = '';
         let branch = '';
+        let triggerUser: string | null = null;
+        let commitMessage: string | null = null;
+
         for (const action of actions) {
           const rev = action['lastBuiltRevision'] as Record<string, unknown> | undefined;
           if (rev) {
             commitSha = String(rev['SHA1'] ?? '');
             const branches = (rev['branch'] as Record<string, unknown>[]) ?? [];
             branch = String(branches[0]?.['name'] ?? '').replace('refs/remotes/origin/', '');
-            break;
+          }
+          // Extract trigger cause (who started the build)
+          const causes = action['causes'] as Record<string, unknown>[] | undefined;
+          if (causes?.length) {
+            triggerUser = String(causes[0]?.['userName'] ?? causes[0]?.['shortDescription'] ?? '');
+          }
+        }
+
+        // Extract commit message from changeSet
+        const changeSet = build['changeSet'] as Record<string, unknown> | undefined;
+        const items = (changeSet?.['items'] as Record<string, unknown>[]) ?? [];
+        if (items.length > 0) {
+          commitMessage = String(items[0]?.['msg'] ?? '');
+          if (!triggerUser) {
+            const author = items[0]?.['author'] as Record<string, unknown> | undefined;
+            triggerUser = String(author?.['fullName'] ?? '');
           }
         }
 
@@ -315,6 +333,7 @@ export class JenkinsCiProvider extends CiProviderBase {
         const timestamp = Number(build['timestamp'] ?? 0);
         const duration = Number(build['duration'] ?? 0);
         const buildUrl = String(build['url'] ?? '');
+        const description = build['description'] ? String(build['description']) : null;
 
         return {
           externalRunId: `${jobName}/${build['number']}`,
@@ -329,6 +348,9 @@ export class JenkinsCiProvider extends CiProviderBase {
           duration: duration > 0 ? Math.round(duration / 1000) : null,
           url: buildUrl || null,
           provider: 'jenkins',
+          triggerUser: triggerUser || null,
+          commitMessage: commitMessage || null,
+          errorSummary: (result === 'FAILURE' || result === 'UNSTABLE') ? (description || `Build ${result.toLowerCase()}`) : null,
         };
       });
     } catch (error) {

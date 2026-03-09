@@ -864,6 +864,9 @@ export interface ProviderPipelineRun {
   duration: number | null;
   url: string | null;
   provider: string;
+  triggerUser?: string | null;
+  commitMessage?: string | null;
+  errorSummary?: string | null;
 }
 
 export async function fetchProjectPipelines(

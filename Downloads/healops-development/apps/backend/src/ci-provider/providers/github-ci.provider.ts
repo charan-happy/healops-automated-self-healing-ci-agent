@@ -402,10 +402,13 @@ export class GitHubCiProvider extends CiProviderBase {
         const durationMs = startedAt && completedAt
           ? new Date(completedAt).getTime() - new Date(startedAt).getTime()
           : null;
+        const actor = run['triggering_actor'] as Record<string, unknown> | undefined;
+        const headCommit = run['head_commit'] as Record<string, unknown> | undefined;
+        const mappedStatus = this.mapGitHubStatus(status, conclusion);
         return {
           externalRunId: String(run['id'] ?? ''),
           workflowName: run['name'] ? String(run['name']) : null,
-          status: this.mapGitHubStatus(status, conclusion),
+          status: mappedStatus,
           branch: String(run['head_branch'] ?? ''),
           commitSha: String(run['head_sha'] ?? ''),
           startedAt,
@@ -413,6 +416,9 @@ export class GitHubCiProvider extends CiProviderBase {
           duration: durationMs !== null ? Math.round(durationMs / 1000) : null,
           url: run['html_url'] ? String(run['html_url']) : null,
           provider: 'github',
+          triggerUser: actor ? String(actor['login'] ?? '') || null : null,
+          commitMessage: headCommit ? String(headCommit['message'] ?? '') || null : null,
+          errorSummary: mappedStatus === 'failed' ? `Workflow ${conclusion || 'failed'}` : null,
         };
       });
     } catch (error) {

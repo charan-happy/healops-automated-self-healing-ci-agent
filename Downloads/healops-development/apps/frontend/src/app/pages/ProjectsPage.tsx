@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   FolderGit2, GitBranch, GitCommit, ArrowRight, Loader2, Search, ChevronDown,
   User, Plus, X, CheckCircle2, XCircle, Clock, Circle, ExternalLink, Timer,
-  Activity, Link2, Trash2, Pencil, Save,
+  Activity, Link2, Trash2, Pencil, Save, AlertTriangle, MessageSquare, Filter,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../_components/PageTransition";
@@ -340,14 +340,26 @@ function AddRepoModal({
 function PipelineRunsTab({ repositoryId }: { repositoryId: string }) {
   const [runs, setRuns] = useState<ProviderPipelineRun[]>([]);
   const [loading, setLoading] = useState(true);
+  const [providerFilter, setProviderFilter] = useState<string>("all");
 
   useEffect(() => {
     setLoading(true);
-    fetchProjectPipelines(repositoryId, 15)
+    fetchProjectPipelines(repositoryId, 30)
       .then((data) => setRuns(data ?? []))
       .catch(() => setRuns([]))
       .finally(() => setLoading(false));
   }, [repositoryId]);
+
+  // Derive unique providers for filter buttons
+  const providers = useMemo(() => {
+    const set = new Set(runs.map((r) => r.provider));
+    return Array.from(set);
+  }, [runs]);
+
+  const filtered = useMemo(
+    () => providerFilter === "all" ? runs : runs.filter((r) => r.provider === providerFilter),
+    [runs, providerFilter],
+  );
 
   if (loading) {
     return (
@@ -368,8 +380,42 @@ function PipelineRunsTab({ repositoryId }: { repositoryId: string }) {
   }
 
   return (
-    <div className="space-y-1.5">
-      {runs.map((run) => {
+    <div className="space-y-2">
+      {/* Provider filter */}
+      {providers.length > 1 && (
+        <div className="flex items-center gap-1.5 pb-1">
+          <Filter size={12} className="text-muted-foreground" />
+          <button
+            onClick={() => setProviderFilter("all")}
+            className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase transition-colors ${
+              providerFilter === "all"
+                ? "bg-brand-cyan/20 text-brand-cyan"
+                : "bg-muted/50 text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            All ({runs.length})
+          </button>
+          {providers.map((p) => {
+            const badge = PROVIDER_BADGE[p];
+            const count = runs.filter((r) => r.provider === p).length;
+            return (
+              <button
+                key={p}
+                onClick={() => setProviderFilter(p)}
+                className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase transition-colors ${
+                  providerFilter === p
+                    ? `${badge?.bg ?? "bg-muted"} ${badge?.color ?? "text-foreground"}`
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {badge?.label ?? p} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {filtered.map((run) => {
         const cfg = STATUS_CONFIG[run.status] ?? STATUS_CONFIG.unknown;
         const Icon = cfg.icon;
         const badge = PROVIDER_BADGE[run.provider];
@@ -377,53 +423,74 @@ function PipelineRunsTab({ repositoryId }: { repositoryId: string }) {
         return (
           <div
             key={run.externalRunId}
-            className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border/40 bg-card/60"
+            className="rounded-lg border border-border/40 bg-card/60 overflow-hidden"
           >
-            <Icon
-              size={16}
-              className={`shrink-0 ${cfg.color} ${run.status === "running" ? "animate-spin" : ""}`}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold truncate">
-                  {run.workflowName ?? "Pipeline"}
-                </span>
-                {badge && (
-                  <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${badge.bg} ${badge.color}`}>
-                    {badge.label}
+            <div className="flex items-center gap-3 px-4 py-2.5">
+              <Icon
+                size={16}
+                className={`shrink-0 ${cfg.color} ${run.status === "running" ? "animate-spin" : ""}`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold truncate">
+                    {run.workflowName ?? "Pipeline"}
                   </span>
-                )}
-                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${cfg.color}`}>
-                  {cfg.label}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                <span className="flex items-center gap-1">
-                  <GitBranch size={10} />
-                  {run.branch}
-                </span>
-                {run.commitSha && (
-                  <span className="font-mono">{run.commitSha.slice(0, 7)}</span>
-                )}
-                {run.duration !== null && (
+                  {badge && (
+                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${badge.bg} ${badge.color}`}>
+                      {badge.label}
+                    </span>
+                  )}
+                  <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${cfg.color}`}>
+                    {cfg.label}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                  {run.triggerUser && (
+                    <span className="flex items-center gap-1">
+                      <User size={10} />
+                      {run.triggerUser}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1">
-                    <Timer size={10} />
-                    {formatDuration(run.duration)}
+                    <GitBranch size={10} />
+                    {run.branch}
                   </span>
+                  {run.commitSha && (
+                    <span className="font-mono">{run.commitSha.slice(0, 7)}</span>
+                  )}
+                  {run.duration !== null && (
+                    <span className="flex items-center gap-1">
+                      <Timer size={10} />
+                      {formatDuration(run.duration)}
+                    </span>
+                  )}
+                  <span className="ml-auto">{formatTimeAgo(run.startedAt)}</span>
+                </div>
+                {run.commitMessage && (
+                  <p className="text-xs text-muted-foreground/70 mt-0.5 truncate flex items-center gap-1">
+                    <MessageSquare size={9} />
+                    {run.commitMessage}
+                  </p>
                 )}
-                <span className="ml-auto">{formatTimeAgo(run.startedAt)}</span>
               </div>
+              {run.url && (
+                <a
+                  href={run.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="shrink-0 text-muted-foreground hover:text-brand-cyan transition-colors"
+                >
+                  <ExternalLink size={14} />
+                </a>
+              )}
             </div>
-            {run.url && (
-              <a
-                href={run.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="shrink-0 text-muted-foreground hover:text-brand-cyan transition-colors"
-              >
-                <ExternalLink size={14} />
-              </a>
+            {/* Error summary for failed pipelines */}
+            {run.errorSummary && run.status === "failed" && (
+              <div className="px-4 py-1.5 border-t border-red-500/10 bg-red-500/5 flex items-center gap-2">
+                <AlertTriangle size={12} className="text-red-400 shrink-0" />
+                <span className="text-xs text-red-400 truncate">{run.errorSummary}</span>
+              </div>
             )}
           </div>
         );

@@ -328,10 +328,12 @@ export class GitLabCiProvider extends CiProviderBase {
         const durationMs = createdAt && updatedAt
           ? new Date(updatedAt).getTime() - new Date(createdAt).getTime()
           : null;
+        const user = p['user'] as Record<string, unknown> | undefined;
+        const mappedStatus = this.mapGitLabStatus(status);
         return {
           externalRunId: String(p['id'] ?? ''),
           workflowName: p['source'] ? String(p['source']) : null,
-          status: this.mapGitLabStatus(status),
+          status: mappedStatus,
           branch: String(p['ref'] ?? ''),
           commitSha: String(p['sha'] ?? ''),
           startedAt: createdAt,
@@ -339,6 +341,9 @@ export class GitLabCiProvider extends CiProviderBase {
           duration: durationMs !== null ? Math.round(durationMs / 1000) : null,
           url: p['web_url'] ? String(p['web_url']) : null,
           provider: 'gitlab',
+          triggerUser: user ? String(user['name'] ?? user['username'] ?? '') || null : null,
+          commitMessage: null, // Not available in pipeline list API
+          errorSummary: mappedStatus === 'failed' ? `Pipeline ${status}` : null,
         };
       });
     } catch (error) {
