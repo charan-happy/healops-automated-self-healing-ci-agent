@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   FolderGit2, GitBranch, GitCommit, ArrowRight, Loader2, Search, ChevronDown,
   User, Plus, X, CheckCircle2, XCircle, Clock, Circle, ExternalLink, Timer,
-  Activity, Link2, Trash2, Pencil, Save, AlertTriangle, MessageSquare, Filter,
+  Activity, Link2, Trash2, Pencil, Save, AlertTriangle, MessageSquare, Filter, Bot,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../_components/PageTransition";
@@ -485,11 +485,44 @@ function PipelineRunsTab({ repositoryId }: { repositoryId: string }) {
                 </a>
               )}
             </div>
-            {/* Error summary for failed pipelines */}
-            {run.errorSummary && run.status === "failed" && (
-              <div className="px-4 py-1.5 border-t border-red-500/10 bg-red-500/5 flex items-center gap-2">
-                <AlertTriangle size={12} className="text-red-400 shrink-0" />
-                <span className="text-xs text-red-400 truncate">{run.errorSummary}</span>
+            {/* Error summary + AI fix status for failed pipelines */}
+            {run.status === "failed" && (
+              <div className="px-4 py-1.5 border-t border-red-500/10 bg-red-500/5 space-y-1">
+                {run.errorSummary && (
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={12} className="text-red-400 shrink-0" />
+                    <span className="text-xs text-red-400 truncate">{run.errorSummary}</span>
+                  </div>
+                )}
+                {run.fixStatus && (
+                  <div className="flex items-center gap-2">
+                    <Bot size={12} className={
+                      run.fixStatus === "running" ? "text-brand-cyan animate-pulse" :
+                      run.fixStatus === "queued" ? "text-yellow-400" :
+                      run.fixStatus === "success" ? "text-emerald-400" : "text-red-400"
+                    } />
+                    <span className={`text-xs ${
+                      run.fixStatus === "running" ? "text-brand-cyan" :
+                      run.fixStatus === "queued" ? "text-yellow-400" :
+                      run.fixStatus === "success" ? "text-emerald-400" : "text-red-400"
+                    }`}>
+                      {run.fixStatus === "running" ? "AI agent fixing..." :
+                       run.fixStatus === "queued" ? "AI fix queued" :
+                       run.fixStatus === "success" ? "AI fix applied" : "AI fix failed"}
+                    </span>
+                    {run.fixPrUrl && (
+                      <a
+                        href={run.fixPrUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-xs text-brand-cyan hover:underline"
+                      >
+                        View PR
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

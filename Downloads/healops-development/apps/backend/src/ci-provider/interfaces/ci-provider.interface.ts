@@ -85,6 +85,10 @@ export interface ProviderPipelineRun {
   triggerUser?: string | null;
   commitMessage?: string | null;
   errorSummary?: string | null;
+  /** AI fix agent status for this pipeline run (enriched by ProjectsService) */
+  fixStatus?: 'queued' | 'running' | 'success' | 'failed' | null;
+  /** URL of the fix PR if one was created */
+  fixPrUrl?: string | null;
 }
 
 /** Result of listing available jobs/workflows/pipelines from a CI provider */

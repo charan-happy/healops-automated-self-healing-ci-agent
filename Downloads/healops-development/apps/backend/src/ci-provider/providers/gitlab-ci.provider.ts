@@ -321,7 +321,7 @@ export class GitLabCiProvider extends CiProviderBase {
         params: { per_page: limit, order_by: 'updated_at', sort: 'desc' },
       });
       const pipelines = (response.data ?? []) as Record<string, unknown>[];
-      return pipelines.map((p) => {
+      const runs: ProviderPipelineRun[] = pipelines.map((p) => {
         const status = String(p['status'] ?? '');
         const createdAt = p['created_at'] ? String(p['created_at']) : null;
         const updatedAt = p['updated_at'] ? String(p['updated_at']) : null;
@@ -342,10 +342,43 @@ export class GitLabCiProvider extends CiProviderBase {
           url: p['web_url'] ? String(p['web_url']) : null,
           provider: 'gitlab',
           triggerUser: user ? String(user['name'] ?? user['username'] ?? '') || null : null,
-          commitMessage: null, // Not available in pipeline list API
+          commitMessage: null,
           errorSummary: mappedStatus === 'failed' ? `Pipeline ${status}` : null,
         };
       });
+
+      // Enrich failed pipelines with actual failed job names
+      const failedRuns = runs.filter((r) => r.status === 'failed');
+      await Promise.allSettled(
+        failedRuns.map(async (run) => {
+          try {
+            const jobsRes = await client.get(
+              `/projects/${projectId}/pipelines/${run.externalRunId}/jobs`,
+              { params: { per_page: 50 } },
+            );
+            const jobs = (jobsRes.data ?? []) as Array<Record<string, unknown>>;
+            const failedJobs = jobs.filter((j) => j['status'] === 'failed');
+            if (failedJobs.length > 0) {
+              const jobNames = failedJobs
+                .map((j) => {
+                  const name = String(j['name'] ?? '');
+                  const stage = j['stage'] ? String(j['stage']) : '';
+                  const reason = j['failure_reason'] ? String(j['failure_reason']) : '';
+                  return reason ? `${name} (${reason})` : (stage ? `${stage}:${name}` : name);
+                })
+                .slice(0, 3);
+              run.errorSummary = `Failed jobs: ${jobNames.join(', ')}`;
+              if (failedJobs.length > 3) {
+                run.errorSummary += ` +${String(failedJobs.length - 3)} more`;
+              }
+            }
+          } catch {
+            // Keep generic errorSummary on failure
+          }
+        }),
+      );
+
+      return runs;
     } catch (error) {
       this.logger.error(`Failed to list GitLab pipelines: ${(error as Error).message}`);
       return [];

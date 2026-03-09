@@ -5,6 +5,8 @@ import { Injectable } from '@nestjs/common';
 import { DBService } from '@db/db.service';
 import { webhookEvents, pipelineRuns } from '../../schema/ingestion';
 import { failures } from '../../schema/analysis';
+import { jobs } from '../../schema/agent';
+import { pullRequests } from '../../schema/outputs';
 import { eq, desc, inArray } from 'drizzle-orm';
 
 @Injectable()
@@ -90,13 +92,18 @@ export class WebhookEventsRepository {
   }
 
   /**
-   * Bulk lookup: for a list of externalRunIds, return a map of
-   * externalRunId → first failure errorSummary (+ affectedFile).
-   * Used to enrich CI provider pipeline runs with actual error details.
+   * Bulk lookup: for a list of externalRunIds, return enrichment data:
+   * errorSummary, affectedFile, fix agent status, and PR URL.
+   * Joins: pipeline_runs → failures → jobs → pull_requests
    */
-  async findFailureSummariesByExternalRunIds(
+  async findPipelineRunEnrichment(
     externalRunIds: string[],
-  ): Promise<Map<string, { errorSummary: string; affectedFile: string | null }>> {
+  ): Promise<Map<string, {
+    errorSummary: string;
+    affectedFile: string | null;
+    fixStatus: string | null;
+    fixPrUrl: string | null;
+  }>> {
     if (externalRunIds.length === 0) return new Map();
 
     const rows = await this.dbService.db
@@ -104,20 +111,37 @@ export class WebhookEventsRepository {
         externalRunId: pipelineRuns.externalRunId,
         errorSummary: failures.errorSummary,
         affectedFile: failures.affectedFile,
+        jobStatus: jobs.status,
+        prUrl: pullRequests.prUrl,
       })
       .from(pipelineRuns)
       .innerJoin(failures, eq(failures.pipelineRunId, pipelineRuns.id))
+      .leftJoin(jobs, eq(jobs.failureId, failures.id))
+      .leftJoin(pullRequests, eq(pullRequests.jobId, jobs.id))
       .where(inArray(pipelineRuns.externalRunId, externalRunIds))
       .orderBy(failures.detectedAt);
 
-    const result = new Map<string, { errorSummary: string; affectedFile: string | null }>();
+    const result = new Map<string, {
+      errorSummary: string;
+      affectedFile: string | null;
+      fixStatus: string | null;
+      fixPrUrl: string | null;
+    }>();
+
     for (const row of rows) {
-      // Keep the first (earliest) failure per pipeline run
-      if (!result.has(row.externalRunId)) {
+      // Keep the first (earliest) failure per pipeline run, but prefer rows with job data
+      const existing = result.get(row.externalRunId);
+      if (!existing) {
         result.set(row.externalRunId, {
           errorSummary: row.errorSummary,
           affectedFile: row.affectedFile,
+          fixStatus: row.jobStatus,
+          fixPrUrl: row.prUrl,
         });
+      } else if (!existing.fixStatus && row.jobStatus) {
+        // Update with fix status if we didn't have one yet
+        existing.fixStatus = row.jobStatus;
+        existing.fixPrUrl = row.prUrl;
       }
     }
     return result;

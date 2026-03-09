@@ -305,24 +305,32 @@ export class ProjectsService {
 
     const sliced = allRuns.slice(0, limit);
 
-    // Enrich failed runs with actual error details from the failures table
+    // Enrich failed runs with actual error details + fix agent status from DB
     const failedRunIds = sliced
       .filter((r) => r.status === 'failed' && r.externalRunId)
       .map((r) => r.externalRunId);
 
     if (failedRunIds.length > 0) {
       try {
-        const failureMap = await this.webhookEventsRepository
-          .findFailureSummariesByExternalRunIds(failedRunIds);
+        const enrichmentMap = await this.webhookEventsRepository
+          .findPipelineRunEnrichment(failedRunIds);
         for (const run of sliced) {
-          const failure = failureMap.get(run.externalRunId);
-          if (failure) {
-            const file = failure.affectedFile ? `${failure.affectedFile}: ` : '';
-            run.errorSummary = `${file}${failure.errorSummary}`.slice(0, 500);
+          const enrichment = enrichmentMap.get(run.externalRunId);
+          if (enrichment) {
+            // Use detailed error summary from failures table
+            const file = enrichment.affectedFile ? `${enrichment.affectedFile}: ` : '';
+            run.errorSummary = `${file}${enrichment.errorSummary}`.slice(0, 500);
+            // Map fix agent status
+            const s = enrichment.fixStatus;
+            if (s === 'queued' || s === 'running') run.fixStatus = s as 'queued' | 'running';
+            else if (s === 'success') run.fixStatus = 'success';
+            else if (s === 'failed' || s === 'escalated') run.fixStatus = 'failed';
+            // Attach PR URL if available
+            if (enrichment.fixPrUrl) run.fixPrUrl = enrichment.fixPrUrl;
           }
         }
       } catch (err) {
-        this.logger.warn(`Failed to enrich pipeline runs with failure details: ${(err as Error).message}`);
+        this.logger.warn(`Failed to enrich pipeline runs: ${(err as Error).message}`);
       }
     }
 

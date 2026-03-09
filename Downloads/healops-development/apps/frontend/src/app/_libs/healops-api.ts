@@ -873,6 +873,8 @@ export interface ProviderPipelineRun {
   triggerUser?: string | null;
   commitMessage?: string | null;
   errorSummary?: string | null;
+  fixStatus?: "queued" | "running" | "success" | "failed" | null;
+  fixPrUrl?: string | null;
 }
 
 export async function fetchProjectPipelines(
