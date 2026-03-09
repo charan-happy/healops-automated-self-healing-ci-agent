@@ -5,10 +5,8 @@ import { useEffect, useState } from "react";
 import { GitCommit, Loader2, FileCode, Plus, Minus, User, Calendar, ExternalLink, Bot, Clock, CheckCircle2, XCircle, Wrench } from "lucide-react";
 import PageTransition from "../_components/PageTransition";
 import StatusBadge from "../_components/StatusBadge";
-import { fetchCommitDetail } from "../_libs/github/github-service";
-import type { CommitDetail } from "../_libs/github/github-service";
-import { fetchPipelineStatus } from "../_libs/healops-api";
-import type { PipelineStatusResponse, PipelineFailure } from "../_libs/healops-api";
+import { fetchCommitDetailFromBackend, fetchPipelineStatus } from "../_libs/healops-api";
+import type { CommitDetailResponse, PipelineStatusResponse, PipelineFailure } from "../_libs/healops-api";
 import type { PipelineStatus } from "../_libs/mockData";
 import { trackEvent, POSTHOG_EVENTS } from "../_libs/utils/analytics";
 import { FixFeedbackWidget } from "../_components/FixFeedbackWidget";
@@ -17,25 +15,24 @@ import { AgentThinkingTimeline } from "../_components/agent/AgentThinkingTimelin
 const FixDetailsPage = () => {
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
+  const repoId = searchParams.get("repoId");
   const commitId = searchParams.get("commitId");
 
-  const [owner, repo] = projectId ? projectId.split("--") : [null, null];
-
-  const [detail, setDetail] = useState<CommitDetail | null>(null);
+  const [detail, setDetail] = useState<CommitDetailResponse | null>(null);
   const [pipelineData, setPipelineData] = useState<PipelineStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!owner || !repo || !commitId) {
+    if (!repoId || !commitId) {
       setLoading(false);
       return;
     }
 
-    trackEvent(POSTHOG_EVENTS.FIX_DETAILS_VIEWED, { owner, repo, commitId });
+    trackEvent(POSTHOG_EVENTS.FIX_DETAILS_VIEWED, { projectId, repoId, commitId });
 
     Promise.all([
-      fetchCommitDetail(owner, repo, commitId),
+      fetchCommitDetailFromBackend(repoId, commitId),
       fetchPipelineStatus(commitId),
     ])
       .then(([commitDetail, status]) => {
@@ -44,7 +41,7 @@ const FixDetailsPage = () => {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [owner, repo, commitId]);
+  }, [repoId, commitId, projectId]);
 
   if (loading) {
     return (
@@ -110,14 +107,16 @@ const FixDetailsPage = () => {
                 ))}
               </span>
             )}
-            <a
-              href={detail.htmlUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-brand-cyan hover:underline ml-auto"
-            >
-              View on GitHub <ExternalLink size={12} />
-            </a>
+            {detail.htmlUrl && (
+              <a
+                href={detail.htmlUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-brand-cyan hover:underline ml-auto"
+              >
+                View commit <ExternalLink size={12} />
+              </a>
+            )}
           </div>
 
           {/* Full commit message if multiline */}

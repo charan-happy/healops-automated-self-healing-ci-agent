@@ -128,6 +128,20 @@ export class ProjectsController {
     );
   }
 
+  // ─── Commit Detail ─────────────────────────────────────────────────────
+
+  @Get(':repositoryId/commits/:commitSha/detail')
+  @ApiOperation({ summary: 'Get commit detail (diff, files, stats) from SCM provider' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Returns commit detail' })
+  async getCommitDetail(
+    @CurrentUser() user: AuthUser,
+    @Param('repositoryId') repositoryId: string,
+    @Param('commitSha') commitSha: string,
+  ) {
+    const orgId = await this.resolveOrganizationId(user.id);
+    return this.projectsService.getCommitDetail(repositoryId, orgId, commitSha);
+  }
+
   // ─── CI Provider Jobs (auto-fetch) ─────────────────────────────────────
 
   @Get('ci-providers/:configId/jobs')

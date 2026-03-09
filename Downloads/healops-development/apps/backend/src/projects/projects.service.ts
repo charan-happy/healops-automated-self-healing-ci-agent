@@ -328,6 +328,124 @@ export class ProjectsService {
     }
   }
 
+  // ─── Commit Detail (provider-agnostic) ─────────────────────────────────
+
+  async getCommitDetail(repositoryId: string, organizationId: string, commitSha: string) {
+    const repo = await this.platformRepository.findRepositoryById(repositoryId);
+    if (!repo || repo.organizationId !== organizationId) {
+      throw new NotFoundException('Repository not found');
+    }
+
+    const provider = repo.provider ?? 'github';
+    const parts = repo.name.split('/');
+
+    // Get SCM provider config for auth
+    const scmConfigs = await this.scmProviderConfigsRepository.findConfigsByOrganization(organizationId);
+    const scmConfig = scmConfigs.find((c) => c.isActive && c.providerType === provider);
+    if (!scmConfig) {
+      throw new NotFoundException('No active SCM provider config found for this repository');
+    }
+
+    const configData = (scmConfig.config as Record<string, string>) ?? {};
+    const authToken = configData['accessToken'] ?? '';
+    if (!authToken) {
+      throw new BadRequestException('SCM provider has no access token configured');
+    }
+
+    if (provider === 'gitlab') {
+      return this.fetchGitLabCommitDetail(configData, repo.externalRepoId, commitSha);
+    }
+    if (provider === 'github') {
+      return this.fetchGitHubCommitDetail(configData, parts[0] ?? '', parts[1] ?? '', commitSha);
+    }
+    throw new BadRequestException(`Commit detail not supported for provider: ${provider}`);
+  }
+
+  private async fetchGitLabCommitDetail(
+    configData: Record<string, string>,
+    projectId: string,
+    commitSha: string,
+  ) {
+    const serverUrl = configData['serverUrl'] ?? 'https://gitlab.com';
+    const token = configData['accessToken'] ?? '';
+    const baseURL = serverUrl.endsWith('/api/v4') ? serverUrl : `${serverUrl}/api/v4`;
+    const headers = { 'PRIVATE-TOKEN': token };
+
+    // Fetch commit + diff in parallel
+    const [commitResp, diffResp] = await Promise.all([
+      axios.get(`${baseURL}/projects/${encodeURIComponent(projectId)}/repository/commits/${commitSha}`, { headers, timeout: 10_000 }),
+      axios.get(`${baseURL}/projects/${encodeURIComponent(projectId)}/repository/commits/${commitSha}/diff`, { headers, timeout: 10_000 }),
+    ]);
+
+    const commit = commitResp.data as Record<string, unknown>;
+    const diffs = (diffResp.data ?? []) as Record<string, unknown>[];
+    const stats = commit['stats'] as Record<string, number> | undefined;
+
+    return {
+      sha: String(commit['id'] ?? commitSha),
+      message: String(commit['message'] ?? ''),
+      author: String(commit['author_name'] ?? ''),
+      date: commit['authored_date'] ? new Date(String(commit['authored_date'])).toLocaleString() : '',
+      stats: {
+        additions: stats?.['additions'] ?? 0,
+        deletions: stats?.['deletions'] ?? 0,
+        total: (stats?.['additions'] ?? 0) + (stats?.['deletions'] ?? 0),
+      },
+      files: diffs.map((d) => ({
+        filename: String(d['new_path'] ?? d['old_path'] ?? ''),
+        status: d['new_file'] ? 'added' : d['deleted_file'] ? 'removed' : d['renamed_file'] ? 'renamed' : 'modified',
+        additions: String(d['diff'] ?? '').split('\n').filter((l: string) => l.startsWith('+') && !l.startsWith('+++')).length,
+        deletions: String(d['diff'] ?? '').split('\n').filter((l: string) => l.startsWith('-') && !l.startsWith('---')).length,
+        patch: String(d['diff'] ?? ''),
+      })),
+      parents: (commit['parent_ids'] as string[]) ?? [],
+      htmlUrl: String(commit['web_url'] ?? ''),
+    };
+  }
+
+  private async fetchGitHubCommitDetail(
+    configData: Record<string, string>,
+    owner: string,
+    repo: string,
+    commitSha: string,
+  ) {
+    const token = configData['accessToken'] ?? '';
+    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
+
+    const resp = await axios.get(`https://api.github.com/repos/${owner}/${repo}/commits/${commitSha}`, {
+      headers,
+      timeout: 10_000,
+    });
+
+    const data = resp.data as Record<string, unknown>;
+    const commitObj = data['commit'] as Record<string, unknown>;
+    const author = commitObj?.['author'] as Record<string, unknown> | undefined;
+    const statsObj = data['stats'] as Record<string, number> | undefined;
+    const files = (data['files'] ?? []) as Record<string, unknown>[];
+    const parents = ((data['parents'] ?? []) as Record<string, unknown>[]).map((p) => String(p['sha'] ?? ''));
+
+    return {
+      sha: String(data['sha'] ?? commitSha),
+      message: String(commitObj?.['message'] ?? ''),
+      author: String(author?.['name'] ?? (data['author'] as Record<string, unknown>)?.['login'] ?? ''),
+      date: author?.['date'] ? new Date(String(author['date'])).toLocaleString() : '',
+      stats: {
+        additions: statsObj?.['additions'] ?? 0,
+        deletions: statsObj?.['deletions'] ?? 0,
+        total: statsObj?.['total'] ?? 0,
+      },
+      files: files.map((f) => ({
+        filename: String(f['filename'] ?? ''),
+        status: String(f['status'] ?? 'modified'),
+        additions: Number(f['additions'] ?? 0),
+        deletions: Number(f['deletions'] ?? 0),
+        patch: String(f['patch'] ?? ''),
+      })),
+      parents,
+      htmlUrl: String(data['html_url'] ?? ''),
+    };
+  }
+
   // ─── CI Provider Job Discovery ──────────────────────────────────────────
 
   async listCiProviderJobs(ciProviderConfigId: string, organizationId: string) {

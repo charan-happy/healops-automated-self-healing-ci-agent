@@ -878,6 +878,34 @@ export async function fetchProjectPipelines(
   );
 }
 
+// ─── Commit Detail API ──────────────────────────────────────────────────────
+
+export interface CommitDetailResponse {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+  stats: { additions: number; deletions: number; total: number };
+  files: Array<{
+    filename: string;
+    status: string;
+    additions: number;
+    deletions: number;
+    patch?: string;
+  }>;
+  parents: string[];
+  htmlUrl: string;
+}
+
+export async function fetchCommitDetailFromBackend(
+  repositoryId: string,
+  commitSha: string,
+): Promise<CommitDetailResponse | null> {
+  return fetchApi<CommitDetailResponse>(
+    `/v1/healops/projects/${repositoryId}/commits/${commitSha}/detail`,
+  );
+}
+
 export async function addRepositoriesToOrg(
   providerConfigId: string,
   providerType: "ci" | "scm",
