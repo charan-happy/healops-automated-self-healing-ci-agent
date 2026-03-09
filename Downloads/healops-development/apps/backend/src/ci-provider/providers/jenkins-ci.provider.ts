@@ -224,13 +224,66 @@ export class JenkinsCiProvider extends CiProviderBase {
 
   override async listRecentPipelineRuns(
     config: CiConnectionConfig,
-    repoFullName: string,
+    _repoFullName: string,
     limit: number,
   ): Promise<ProviderPipelineRun[]> {
     const client = this.buildClient(config);
-    // Prefer config.repo (the explicit pipeline/job name) over repoFullName
-    const jobName = config.repo || repoFullName.split('/').pop() || repoFullName;
+    const explicitJob = config.repo?.trim();
 
+    try {
+      // If no specific job is set, fetch builds from ALL jobs on this Jenkins
+      const jobNames: string[] = [];
+      if (explicitJob) {
+        jobNames.push(explicitJob);
+      } else {
+        // Discover all jobs
+        const rootResp = await client.get('/api/json', {
+          params: { tree: 'jobs[name,_class]' },
+        });
+        const rootData = rootResp.data as Record<string, unknown>;
+        const jobs = (rootData['jobs'] as Array<Record<string, unknown>>) ?? [];
+        for (const job of jobs) {
+          const cls = String(job['_class'] ?? '');
+          if (!cls.includes('Folder') && !cls.includes('OrganizationFolder')) {
+            jobNames.push(String(job['name'] ?? ''));
+          }
+        }
+      }
+
+      // Fetch builds from each job in parallel
+      const perJob = Math.max(3, Math.ceil(limit / Math.max(jobNames.length, 1)));
+      const allRuns: ProviderPipelineRun[] = [];
+
+      const results = await Promise.allSettled(
+        jobNames.map((jn) => this.fetchBuildsForJob(client, jn, perJob)),
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          allRuns.push(...result.value);
+        }
+      }
+
+      // Sort by start time descending and take limit
+      allRuns.sort((a, b) => {
+        const ta = a.startedAt ? new Date(a.startedAt).getTime() : 0;
+        const tb = b.startedAt ? new Date(b.startedAt).getTime() : 0;
+        return tb - ta;
+      });
+
+      return allRuns.slice(0, limit);
+    } catch (error) {
+      this.logger.error(
+        `Failed to list Jenkins pipeline runs: ${(error as Error).message}`,
+      );
+      return [];
+    }
+  }
+
+  private async fetchBuildsForJob(
+    client: AxiosInstance,
+    jobName: string,
+    limit: number,
+  ): Promise<ProviderPipelineRun[]> {
     try {
       const response = await client.get(
         `/job/${encodeURIComponent(jobName)}/api/json`,
@@ -246,7 +299,6 @@ export class JenkinsCiProvider extends CiProviderBase {
 
       return builds.slice(0, limit).map((build) => {
         const actions = (build['actions'] as Record<string, unknown>[]) ?? [];
-        // Extract git info from build actions
         let commitSha = '';
         let branch = '';
         for (const action of actions) {
@@ -280,8 +332,8 @@ export class JenkinsCiProvider extends CiProviderBase {
         };
       });
     } catch (error) {
-      this.logger.error(
-        `Failed to list Jenkins pipeline runs for ${jobName}: ${(error as Error).message}`,
+      this.logger.warn(
+        `Failed to fetch Jenkins builds for job ${jobName}: ${(error as Error).message}`,
       );
       return [];
     }
