@@ -4,7 +4,8 @@
 import { Injectable } from '@nestjs/common';
 import { DBService } from '@db/db.service';
 import { webhookEvents, pipelineRuns } from '../../schema/ingestion';
-import { eq, desc } from 'drizzle-orm';
+import { failures } from '../../schema/analysis';
+import { eq, desc, inArray } from 'drizzle-orm';
 
 @Injectable()
 export class WebhookEventsRepository {
@@ -86,5 +87,39 @@ export class WebhookEventsRepository {
       .where(eq(pipelineRuns.id, id))
       .returning();
     return row ?? null;
+  }
+
+  /**
+   * Bulk lookup: for a list of externalRunIds, return a map of
+   * externalRunId → first failure errorSummary (+ affectedFile).
+   * Used to enrich CI provider pipeline runs with actual error details.
+   */
+  async findFailureSummariesByExternalRunIds(
+    externalRunIds: string[],
+  ): Promise<Map<string, { errorSummary: string; affectedFile: string | null }>> {
+    if (externalRunIds.length === 0) return new Map();
+
+    const rows = await this.dbService.db
+      .select({
+        externalRunId: pipelineRuns.externalRunId,
+        errorSummary: failures.errorSummary,
+        affectedFile: failures.affectedFile,
+      })
+      .from(pipelineRuns)
+      .innerJoin(failures, eq(failures.pipelineRunId, pipelineRuns.id))
+      .where(inArray(pipelineRuns.externalRunId, externalRunIds))
+      .orderBy(failures.detectedAt);
+
+    const result = new Map<string, { errorSummary: string; affectedFile: string | null }>();
+    for (const row of rows) {
+      // Keep the first (earliest) failure per pipeline run
+      if (!result.has(row.externalRunId)) {
+        result.set(row.externalRunId, {
+          errorSummary: row.errorSummary,
+          affectedFile: row.affectedFile,
+        });
+      }
+    }
+    return result;
   }
 }

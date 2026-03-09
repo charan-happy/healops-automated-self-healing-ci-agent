@@ -3,6 +3,7 @@ import axios from 'axios';
 import { PlatformRepository } from '@db/repositories/healops/platform.repository';
 import { CiProviderConfigsRepository } from '@db/repositories/healops/ci-provider-configs.repository';
 import { ScmProviderConfigsRepository } from '@db/repositories/healops/scm-provider-configs.repository';
+import { WebhookEventsRepository } from '@db/repositories/healops/webhook-events.repository';
 import { GithubService } from '../github/github.service';
 import { CiProviderFactory } from '../ci-provider/ci-provider.factory';
 
@@ -14,6 +15,7 @@ export class ProjectsService {
     private readonly platformRepository: PlatformRepository,
     private readonly ciProviderConfigsRepository: CiProviderConfigsRepository,
     private readonly scmProviderConfigsRepository: ScmProviderConfigsRepository,
+    private readonly webhookEventsRepository: WebhookEventsRepository,
     private readonly githubService: GithubService,
     private readonly ciProviderFactory: CiProviderFactory,
   ) {}
@@ -301,7 +303,30 @@ export class ProjectsService {
       return timeB - timeA;
     });
 
-    return allRuns.slice(0, limit);
+    const sliced = allRuns.slice(0, limit);
+
+    // Enrich failed runs with actual error details from the failures table
+    const failedRunIds = sliced
+      .filter((r) => r.status === 'failed' && r.externalRunId)
+      .map((r) => r.externalRunId);
+
+    if (failedRunIds.length > 0) {
+      try {
+        const failureMap = await this.webhookEventsRepository
+          .findFailureSummariesByExternalRunIds(failedRunIds);
+        for (const run of sliced) {
+          const failure = failureMap.get(run.externalRunId);
+          if (failure) {
+            const file = failure.affectedFile ? `${failure.affectedFile}: ` : '';
+            run.errorSummary = `${file}${failure.errorSummary}`.slice(0, 500);
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`Failed to enrich pipeline runs with failure details: ${(err as Error).message}`);
+      }
+    }
+
+    return sliced;
   }
 
   /** Derive the provider-specific repo/job identifier from the repo data. */
