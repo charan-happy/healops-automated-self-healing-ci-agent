@@ -228,8 +228,8 @@ export class JenkinsCiProvider extends CiProviderBase {
     limit: number,
   ): Promise<ProviderPipelineRun[]> {
     const client = this.buildClient(config);
-    // repoFullName is the Jenkins job name
-    const jobName = repoFullName.split('/').pop() ?? repoFullName;
+    // Prefer config.repo (the explicit pipeline/job name) over repoFullName
+    const jobName = config.repo || repoFullName.split('/').pop() || repoFullName;
 
     try {
       const response = await client.get(
