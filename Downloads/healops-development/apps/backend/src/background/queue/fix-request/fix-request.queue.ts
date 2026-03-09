@@ -19,9 +19,18 @@ export interface BatchFixRequestPayload {
   commitSha: string;
   pipelineRunId: string;
   repositoryId: string;
-  githubInstallationId: string;
-  owner: string;
-  repo: string;
+  organizationId: string;
+  scmProvider: string; // 'github' | 'gitlab'
+  scmConnectionConfig: {
+    owner: string;
+    repo: string;
+    authToken: string;
+    serverUrl?: string;
+  };
+  // Backward compat (optional — used by legacy GitHub-only flow)
+  githubInstallationId?: string;
+  owner?: string;
+  repo?: string;
 }
 
 @Injectable()

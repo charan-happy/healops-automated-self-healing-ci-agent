@@ -5,6 +5,7 @@ import { Inject, Logger, forwardRef } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { DeadLetterQueueService } from '@dead-letter-queue/dead-letter-queue.service';
 import { GithubWebhookService } from '../../../github-webhook/github-webhook.service';
+import { CiWebhookService } from '../../../ci-webhook/ci-webhook.service';
 
 @Processor(QueueName.HEALOPS_WEBHOOK_INGEST, {
   concurrency: 3,
@@ -18,6 +19,8 @@ export class WebhookIngestQueueProcessor extends WorkerHost {
   constructor(
     @Inject(forwardRef(() => GithubWebhookService))
     private readonly githubWebhookService: GithubWebhookService,
+    @Inject(forwardRef(() => CiWebhookService))
+    private readonly ciWebhookService: CiWebhookService,
     private readonly dlqService: DeadLetterQueueService,
   ) {
     super();
@@ -27,7 +30,8 @@ export class WebhookIngestQueueProcessor extends WorkerHost {
 
   async process(job: Job<IWebhookIngestJobData, any, string>, _token?: string): Promise<any> {
     const { webhookEventId, eventType, payload, repository } = job.data;
-    let logString_ = `Processing webhook ingest for event ${webhookEventId} (${eventType})`;
+    const provider = repository.provider ?? 'github';
+    let logString_ = `Processing webhook ingest for event ${webhookEventId} (${eventType}) via ${provider}`;
     this.logger.debug(logString_, 'WebhookIngestQueueProcessor');
     if (typeof job.log === 'function') job.log(logString_);
 
@@ -39,15 +43,38 @@ export class WebhookIngestQueueProcessor extends WorkerHost {
         );
       });
 
-      await Promise.race([
-        this.githubWebhookService.processEventAsync(
+      let processingPromise: Promise<void>;
+
+      if (provider === 'github') {
+        // GitHub webhooks — use existing GitHub-specific processing
+        processingPromise = this.githubWebhookService.processEventAsync(
           webhookEventId,
           eventType,
           payload,
           repository,
-        ),
-        timeoutPromise,
-      ]);
+        );
+      } else {
+        // GitLab, Jenkins, etc. — use provider-agnostic CI webhook processing
+        const context: {
+          headBranch: string;
+          headSha: string;
+          externalRunId?: string;
+          workflowName?: string;
+        } = {
+          headBranch: job.data.headBranch ?? repository.defaultBranch,
+          headSha: job.data.headSha ?? '',
+        };
+        if (job.data.externalRunId !== undefined) context.externalRunId = job.data.externalRunId;
+        if (job.data.workflowName !== undefined) context.workflowName = job.data.workflowName;
+        processingPromise = this.ciWebhookService.processEventAsync(
+          webhookEventId,
+          eventType,
+          repository,
+          context,
+        );
+      }
+
+      await Promise.race([processingPromise, timeoutPromise]);
 
       logString_ = `Webhook ingest completed for event ${webhookEventId}`;
       this.logger.debug(logString_, 'WebhookIngestQueueProcessor');

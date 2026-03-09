@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { QueueName } from '@bg/constants/job.constant';
 import { GithubWebhookModule } from '../../../github-webhook/github-webhook.module';
+import { CiWebhookModule } from '../../../ci-webhook/ci-webhook.module';
 import { WebhookIngestQueueProcessor } from './webhook-ingest-queue.processor';
 import { WebhookIngestQueueService } from './webhook-ingest-queue.service';
 import { DeadLetterQueueModule } from '@dead-letter-queue/dead-letter-queue.module';
@@ -10,6 +11,7 @@ import { DeadLetterQueueModule } from '@dead-letter-queue/dead-letter-queue.modu
   imports: [
     BullModule.registerQueue({ name: QueueName.HEALOPS_WEBHOOK_INGEST }),
     forwardRef(() => GithubWebhookModule),
+    forwardRef(() => CiWebhookModule),
     DeadLetterQueueModule,
   ],
   providers: [WebhookIngestQueueProcessor, WebhookIngestQueueService],

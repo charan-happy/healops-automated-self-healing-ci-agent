@@ -11,6 +11,7 @@ import {
   fetchDashboardMetrics,
   fetchRecentJobs,
   fetchTrendData,
+  fetchRepoHealth,
   fetchCiProviders,
   fetchScmProviders,
   isDemoMode,
@@ -84,10 +85,11 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [m, jobs, trends, ci, scm] = await Promise.all([
+        const [m, jobs, trends, health, ci, scm] = await Promise.all([
           fetchDashboardMetrics(),
           fetchRecentJobs(),
           fetchTrendData("30d"),
+          isDemoMode() ? Promise.resolve(null) : fetchRepoHealth(),
           isDemoMode() ? Promise.resolve(null) : fetchCiProviders(),
           isDemoMode() ? Promise.resolve(null) : fetchScmProviders(),
         ]);
@@ -100,34 +102,7 @@ export default function DashboardPage() {
         setMetrics(m ?? (demo ? DEMO_METRICS : null));
         setRecentJobs(jobs ?? (demo ? DEMO_JOBS : []));
         setTrendData(trends ?? (demo ? generateTrendData(30) : []));
-        setRepoHealth(demo ? DEMO_REPOS : []);
-
-        // Derive repo health from real jobs if available
-        if (jobs && jobs.length > 0) {
-          const repoMap = new Map<string, { total: number; success: number; lastAt: string | null }>();
-          for (const job of jobs) {
-            const entry = repoMap.get(job.repository) ?? { total: 0, success: 0, lastAt: null };
-            entry.total++;
-            if (job.status === "completed") entry.success++;
-            if (!entry.lastAt || job.startedAt > entry.lastAt) entry.lastAt = job.startedAt;
-            repoMap.set(job.repository, entry);
-          }
-          const derived: RepoHealth[] = [];
-          for (const [name, data] of repoMap) {
-            const rate = data.total > 0 ? (data.success / data.total) * 100 : 0;
-            derived.push({
-              id: name,
-              name: name.split("/").pop() ?? name,
-              fullName: name,
-              status: rate >= 80 ? "healthy" : rate >= 50 ? "degraded" : "failing",
-              lastFixAt: data.lastAt,
-              totalFixes: data.success,
-              successRate: rate,
-              openIssues: data.total - data.success,
-            });
-          }
-          setRepoHealth(derived);
-        }
+        setRepoHealth(health ?? (demo ? DEMO_REPOS : []));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load dashboard");
       } finally {

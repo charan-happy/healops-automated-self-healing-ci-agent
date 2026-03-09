@@ -30,12 +30,28 @@ export interface MetricsResult {
 
 export interface RecentJob {
   id: string;
+  repository: string;
+  branch: string;
+  commitSha: string;
   status: string;
-  repoName: string | null;
-  errorType: string | null;
-  prLink: string | null;
-  createdAt: Date | null;
-  completedAt: Date | null;
+  failureType: string | null;
+  confidence: number | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  duration: number | null;
+  attempts: number;
+  prUrl: string | null;
+}
+
+export interface RepoHealthEntry {
+  id: string;
+  name: string;
+  fullName: string;
+  status: 'healthy' | 'degraded' | 'failing';
+  lastFixAt: string | null;
+  totalFixes: number;
+  successRate: number;
+  openIssues: number;
 }
 
 export interface TrendDataPoint {
@@ -173,27 +189,40 @@ export class DashboardService {
 
       const whereClause = and(...conditions);
 
+      const repoJoin = sql`${pipelineRuns.commitId} IN (
+        SELECT c.id FROM commits c
+        INNER JOIN branches b ON c.branch_id = b.id
+        WHERE b.repository_id = ${repositories.id}
+      )`;
+
       const [dataRows, countResult] = await Promise.all([
         this.dbService.db
           .select({
             id: jobs.id,
             status: jobs.status,
-            repoName: repositories.name,
-            errorType: jobs.classifiedFailureType,
-            createdAt: jobs.createdAt,
+            repository: repositories.name,
+            branch: sql<string>`(
+              SELECT b.name FROM commits c
+              INNER JOIN branches b ON c.branch_id = b.id
+              WHERE c.id = ${pipelineRuns.commitId}
+              LIMIT 1
+            )`,
+            commitSha: sql<string>`(
+              SELECT c.sha FROM commits c
+              WHERE c.id = ${pipelineRuns.commitId}
+              LIMIT 1
+            )`,
+            failureType: jobs.classifiedFailureType,
+            confidence: jobs.confidence,
+            startedAt: jobs.startedAt,
             completedAt: jobs.completedAt,
+            durationMs: sql<number>`EXTRACT(EPOCH FROM (${jobs.completedAt} - ${jobs.startedAt})) * 1000`,
+            attempts: jobs.currentRetry,
           })
           .from(jobs)
           .innerJoin(failures, eq(jobs.failureId, failures.id))
           .innerJoin(pipelineRuns, eq(failures.pipelineRunId, pipelineRuns.id))
-          .innerJoin(
-            repositories,
-            sql`${pipelineRuns.commitId} IN (
-              SELECT c.id FROM commits c
-              INNER JOIN branches b ON c.branch_id = b.id
-              WHERE b.repository_id = ${repositories.id}
-            )`,
-          )
+          .innerJoin(repositories, repoJoin)
           .where(whereClause)
           .orderBy(desc(jobs.createdAt))
           .limit(limit)
@@ -203,14 +232,7 @@ export class DashboardService {
           .from(jobs)
           .innerJoin(failures, eq(jobs.failureId, failures.id))
           .innerJoin(pipelineRuns, eq(failures.pipelineRunId, pipelineRuns.id))
-          .innerJoin(
-            repositories,
-            sql`${pipelineRuns.commitId} IN (
-              SELECT c.id FROM commits c
-              INNER JOIN branches b ON c.branch_id = b.id
-              WHERE b.repository_id = ${repositories.id}
-            )`,
-          )
+          .innerJoin(repositories, repoJoin)
           .where(whereClause),
       ]);
 
@@ -220,12 +242,17 @@ export class DashboardService {
       return {
         data: dataRows.map((row) => ({
           id: row.id,
+          repository: row.repository ?? '',
+          branch: row.branch ?? '',
+          commitSha: row.commitSha ?? '',
           status: row.status,
-          repoName: row.repoName,
-          errorType: row.errorType,
-          prLink: null, // PR link resolved separately if needed
-          createdAt: row.createdAt,
-          completedAt: row.completedAt,
+          failureType: row.failureType,
+          confidence: row.confidence,
+          startedAt: row.startedAt?.toISOString() ?? null,
+          completedAt: row.completedAt?.toISOString() ?? null,
+          duration: row.durationMs ? Math.round(row.durationMs) : null,
+          attempts: row.attempts ?? 0,
+          prUrl: null,
         })),
         total,
       };
@@ -322,6 +349,53 @@ export class DashboardService {
       });
     } catch (error) {
       this.logger.error(`Failed to get cost breakdown: ${(error as Error).message}`);
+      return [];
+    }
+  }
+
+  async getRepoHealth(organizationId: string): Promise<RepoHealthEntry[]> {
+    try {
+      const rows = await this.dbService.db
+        .select({
+          id: repositories.id,
+          name: repositories.name,
+          totalJobs: sql<number>`count(${jobs.id})::int`,
+          successCount: sql<number>`count(${jobs.id}) FILTER (WHERE ${jobs.status} = 'success')::int`,
+          openIssues: sql<number>`count(${jobs.id}) FILTER (WHERE ${jobs.status} IN ('queued', 'running', 'failed'))::int`,
+          lastFixAt: sql<string>`max(${jobs.completedAt}) FILTER (WHERE ${jobs.status} = 'success')`,
+        })
+        .from(repositories)
+        .leftJoin(
+          pipelineRuns,
+          sql`${pipelineRuns.commitId} IN (
+            SELECT c.id FROM commits c
+            INNER JOIN branches b ON c.branch_id = b.id
+            WHERE b.repository_id = ${repositories.id}
+          )`,
+        )
+        .leftJoin(failures, eq(failures.pipelineRunId, pipelineRuns.id))
+        .leftJoin(jobs, eq(jobs.failureId, failures.id))
+        .where(eq(repositories.organizationId, organizationId))
+        .groupBy(repositories.id, repositories.name);
+
+      return rows.map((row) => {
+        const total = row.totalJobs ?? 0;
+        const success = row.successCount ?? 0;
+        const rate = total > 0 ? (success / total) * 100 : 100;
+        const shortName = row.name.includes('/') ? row.name.split('/').pop()! : row.name;
+        return {
+          id: row.id,
+          name: shortName,
+          fullName: row.name,
+          status: (rate >= 80 ? 'healthy' : rate >= 50 ? 'degraded' : 'failing') as RepoHealthEntry['status'],
+          lastFixAt: row.lastFixAt ?? null,
+          totalFixes: success,
+          successRate: Math.round(rate * 100) / 100,
+          openIssues: row.openIssues ?? 0,
+        };
+      });
+    } catch (error) {
+      this.logger.error(`Failed to get repo health: ${(error as Error).message}`);
       return [];
     }
   }

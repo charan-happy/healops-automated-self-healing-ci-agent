@@ -2,13 +2,15 @@
 // BullMQ worker for the AI fix pipeline.
 // Single errors: manual API (POST /v1/healops/fix-request) — no branch/push.
 // Batch errors: webhook pipeline — creates agent branch, fixes all errors,
-//               commits and pushes to GitHub.
+//               commits and pushes via the appropriate SCM provider.
 
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { JobName, QueueName } from '@bg/constants/job.constant';
-import { GithubService } from '@github/github.service';
+import { CiProviderFactory } from '../../../ci-provider/ci-provider.factory';
+import { CiProviderBase } from '../../../ci-provider/providers/ci-provider.base';
+import { CiConnectionConfig } from '../../../ci-provider/interfaces/ci-provider.interface';
 import { HealopsPullRequestsRepository } from '@db/repositories/healops/pull-requests.repository';
 import { PlatformRepository } from '@db/repositories/healops/platform.repository';
 import { WebhookEventsRepository } from '@db/repositories/healops/webhook-events.repository';
@@ -52,7 +54,7 @@ export class FixRequestProcessor extends WorkerHost {
 
   constructor(
     private readonly fixAgentService: FixAgentService,
-    private readonly githubService: GithubService,
+    private readonly ciProviderFactory: CiProviderFactory,
     private readonly platformRepository: PlatformRepository,
     private readonly webhookEventsRepository: WebhookEventsRepository,
     private readonly pullRequestsRepository: HealopsPullRequestsRepository,
@@ -110,23 +112,38 @@ export class FixRequestProcessor extends WorkerHost {
   ): Promise<BatchFixResult> {
     const {
       buildErrors, branch, commitSha,
-      pipelineRunId, repositoryId, githubInstallationId, owner, repo,
+      pipelineRunId, repositoryId,
+      scmProvider: scmProviderName, scmConnectionConfig,
+      // backward compat:
+      githubInstallationId, owner, repo,
     } = job.data;
 
-    // Validate that repo context is available (missing for old jobs queued before code change)
-    const hasRepoContext = Boolean(pipelineRunId && repositoryId && githubInstallationId && owner && repo);
+    // Resolve the SCM provider — use new fields if present, fall back to GitHub legacy
+    const providerName = scmProviderName ?? 'github';
+    const scmProvider = this.ciProviderFactory.getProvider(providerName);
+    const config: CiConnectionConfig = scmConnectionConfig ?? {
+      owner: owner ?? '',
+      repo: repo ?? '',
+      authToken: '',
+    };
+
+    const hasRepoContext = Boolean(
+      pipelineRunId && repositoryId &&
+      (scmConnectionConfig || (githubInstallationId && owner && repo)),
+    );
 
     this.logger.log(
       `[BATCH_FIX_REQUEST] Processing job ${String(job.id)} — ` +
-        `${String(buildErrors.length)} error(s), branch=${branch} commit=${commitSha.slice(0, 8)}` +
+        `${String(buildErrors.length)} error(s), branch=${branch} commit=${commitSha.slice(0, 8)} ` +
+        `scmProvider=${providerName}` +
         (hasRepoContext ? ` pipeline=${pipelineRunId}` : ' (no repo context)'),
     );
 
     if (typeof job.log === 'function') {
-      await job.log(`Processing ${String(buildErrors.length)} build errors from ${branch}@${commitSha.slice(0, 8)}`);
+      await job.log(`Processing ${String(buildErrors.length)} build errors from ${branch}@${commitSha.slice(0, 8)} via ${providerName}`);
     }
 
-    // ── 1. Create agent branch on GitHub ──────────────────────────────────
+    // ── 1. Create agent branch on SCM provider ──────────────────────────
     let agentBranch: string | null = null;
     let branchCreated = false;
 
@@ -134,16 +151,10 @@ export class FixRequestProcessor extends WorkerHost {
       agentBranch = `agent-fix/${branch}`;
       this.logger.log(
         `[BATCH_FIX_REQUEST] Creating branch ${agentBranch} from ${commitSha.slice(0, 8)} ` +
-          `(installationId=${githubInstallationId}, owner=${owner}, repo=${repo})`,
+          `via ${providerName} (repo=${config.repo})`,
       );
       try {
-        branchCreated = await this.githubService.createBranch(
-          githubInstallationId,
-          owner,
-          repo,
-          agentBranch,
-          commitSha,
-        );
+        branchCreated = await scmProvider.createBranch(config, agentBranch, commitSha);
         this.logger.log(`[BRANCH NAME CREATED] ${agentBranch} (result=${String(branchCreated)})`);
       } catch (error) {
         const errMsg = (error as Error).message;
@@ -152,23 +163,14 @@ export class FixRequestProcessor extends WorkerHost {
         );
         if (typeof job.log === 'function') {
           await job.log(`BRANCH CREATION FAILED: ${errMsg}`);
-          await job.log(
-            `  installationId=${githubInstallationId} owner=${owner} repo=${repo} sha=${commitSha}`,
-          );
         }
       }
     } else {
       this.logger.warn(
-        `[BATCH_FIX_REQUEST] Skipping branch creation — missing repo context ` +
-          `(pipelineRunId=${String(pipelineRunId)}, repositoryId=${String(repositoryId)}, ` +
-          `installationId=${String(githubInstallationId)}, owner=${String(owner)}, repo=${String(repo)})`,
+        `[BATCH_FIX_REQUEST] Skipping branch creation — missing repo context`,
       );
       if (typeof job.log === 'function') {
-        await job.log(
-          `SKIPPED branch creation — hasRepoContext=false: ` +
-            `pipelineRunId=${String(pipelineRunId)}, repositoryId=${String(repositoryId)}, ` +
-            `installationId=${String(githubInstallationId)}, owner=${String(owner)}, repo=${String(repo)}`,
-        );
+        await job.log(`SKIPPED branch creation — hasRepoContext=false`);
       }
     }
 
@@ -194,11 +196,9 @@ export class FixRequestProcessor extends WorkerHost {
       }
     }
 
-    // ── 2b. Enrich errors with actual source code from GitHub ──────────
-    // CI logs produce noisy snippets ([API] prefixes, ANSI codes, error messages).
-    // The LLM needs real source code to generate targeted fixes.
+    // ── 2b. Enrich errors with actual source code from SCM ──────────────
     if (hasRepoContext) {
-      await this.enrichWithSourceCode(buildErrors, githubInstallationId, owner, repo, commitSha);
+      await this.enrichWithSourceCode(buildErrors, scmProvider, config, commitSha);
     }
 
     // ── 3. Fix all errors ─────────────────────────────────────────────────
@@ -230,16 +230,13 @@ export class FixRequestProcessor extends WorkerHost {
       }
     }
 
-    // ── 4. Collect successful fixes and push to GitHub ────────────────────
+    // ── 4. Collect successful fixes and push to SCM ────────────────────────
     let agentCommitSha: string | null = null;
     const completedResults = results.filter(
       (r) => r.status === 'completed' && r.fixedCode,
     );
 
     if (branchCreated && agentBranch && completedResults.length > 0) {
-      // Group fixes by file path so multiple errors in the same file
-      // are all applied to ONE copy of the original content.
-      // Without this, the second fix would overwrite the first (both start from original).
       const fixesByFile = new Map<string, Array<{ errorLineNumber: number; fixedCode: string }>>();
       const filePathCache = new Map<string, { resolvedPath: string; originalContent: string | null }>();
 
@@ -258,10 +255,9 @@ export class FixRequestProcessor extends WorkerHost {
         );
 
         if (filePath && r.fixedCode) {
-          // Resolve the full repo-relative path (CI logs report paths relative to working dir)
           if (!filePathCache.has(filePath)) {
             const resolved = await this.resolveRepoFile(
-              githubInstallationId, owner, repo, commitSha, filePath,
+              scmProvider, config, commitSha, filePath,
             );
             filePathCache.set(filePath, resolved);
           }
@@ -277,7 +273,6 @@ export class FixRequestProcessor extends WorkerHost {
       const files: Array<{ path: string; content: string }> = [];
 
       for (const [resolvedPath, fixes] of fixesByFile) {
-        // Find original content from cache
         let originalContent: string | null = null;
         for (const [, cached] of filePathCache) {
           if (cached.resolvedPath === resolvedPath) {
@@ -290,7 +285,6 @@ export class FixRequestProcessor extends WorkerHost {
           `[FILE_PATCH] Merging ${String(fixes.length)} fix(es) for ${resolvedPath}`,
         );
 
-        // Apply all fixes sequentially to the same content
         let patchedContent = originalContent ?? '';
         for (const fix of fixes) {
           patchedContent = this.applyFixAtLine(
@@ -306,7 +300,6 @@ export class FixRequestProcessor extends WorkerHost {
       }
 
       if (files.length > 0) {
-        // Build commit summary
         const summaries = completedResults
           .map((r) => r.fixSummary || r.classifiedErrorType)
           .filter(Boolean);
@@ -316,13 +309,8 @@ export class FixRequestProcessor extends WorkerHost {
         const commitMessage = `Agent-${pipelineRunId}:${summaryText}`;
 
         try {
-          agentCommitSha = await this.githubService.pushFiles(
-            githubInstallationId,
-            owner,
-            repo,
-            agentBranch,
-            files,
-            commitMessage,
+          agentCommitSha = await scmProvider.pushFiles(
+            config, agentBranch, files, commitMessage,
           );
 
           this.logger.log(
@@ -342,8 +330,8 @@ export class FixRequestProcessor extends WorkerHost {
             });
           }
 
-          // Create draft PR (skip if one already exists for this branch)
-          await this.createFixPr(agentBranch, branch, pipelineRunId, githubInstallationId, owner, repo);
+          // Create draft PR/MR
+          await this.createFixPr(scmProvider, config, agentBranch, branch, pipelineRunId);
 
           if (typeof job.log === 'function') {
             await job.log(`\nPushed ${String(files.length)} fix(es) to ${agentBranch} — commit ${agentCommitSha.slice(0, 8)}`);
@@ -425,18 +413,16 @@ export class FixRequestProcessor extends WorkerHost {
   }
 
   /**
-   * Replace CI-log code snippets with actual source code from GitHub.
+   * Replace CI-log code snippets with actual source code from SCM.
    * Fetches each error's file at the commit SHA and extracts a window of lines
    * around the error line, giving the LLM real code context instead of log noise.
    */
   private async enrichWithSourceCode(
     errors: FixRequestPayload[],
-    installationId: string,
-    owner: string,
-    repo: string,
+    scmProvider: CiProviderBase,
+    config: CiConnectionConfig,
     commitSha: string,
   ): Promise<void> {
-    // Cache fetched files to avoid re-fetching for multiple errors in the same file
     const fileCache = new Map<string, { resolvedPath: string; content: string }>();
 
     for (const error of errors) {
@@ -445,7 +431,7 @@ export class FixRequestProcessor extends WorkerHost {
       let cached = fileCache.get(error.filePath);
       if (!cached) {
         const { resolvedPath, originalContent } = await this.resolveRepoFile(
-          installationId, owner, repo, commitSha, error.filePath,
+          scmProvider, config, commitSha, error.filePath,
         );
         if (!originalContent) {
           this.logger.warn(
@@ -458,7 +444,7 @@ export class FixRequestProcessor extends WorkerHost {
       }
 
       const lines = cached.content.split('\n');
-      const errorIdx = error.lineNumber - 1; // 0-based
+      const errorIdx = error.lineNumber - 1;
       const windowStart = Math.max(0, errorIdx - CODE_WINDOW_BEFORE);
       const windowEnd = Math.min(lines.length, errorIdx + CODE_WINDOW_AFTER + 1);
       const windowLines = lines.slice(windowStart, windowEnd);
@@ -470,14 +456,10 @@ export class FixRequestProcessor extends WorkerHost {
       );
 
       error.codeSnippet = windowLines.join('\n');
-      error.filePath = cached.resolvedPath; // Use resolved monorepo path
+      error.filePath = cached.resolvedPath;
     }
   }
 
-  /**
-   * Resolve the file path for a completed fix by matching it back to the
-   * original build error in the same position.
-   */
   private resolveFilePath(
     result: FixResult,
     buildErrors: FixRequestPayload[],
@@ -491,28 +473,20 @@ export class FixRequestProcessor extends WorkerHost {
     return null;
   }
 
-  /**
-   * CI logs report file paths relative to the build working directory (e.g. src/ai/rag/rag.service.ts)
-   * but the GitHub Contents API needs the full repo-relative path (e.g. apps/backend/src/ai/rag/rag.service.ts).
-   * Try the path as-is first, then try common monorepo prefixes.
-   */
   private static readonly MONOREPO_PREFIXES = [
-    '',                // try as-is first
-    'apps/backend/',   // NestJS backend in monorepo
+    '',
+    'apps/backend/',
   ];
 
   private async resolveRepoFile(
-    installationId: string,
-    owner: string,
-    repo: string,
+    scmProvider: CiProviderBase,
+    config: CiConnectionConfig,
     ref: string,
     filePath: string,
   ): Promise<{ resolvedPath: string; originalContent: string | null }> {
     for (const prefix of FixRequestProcessor.MONOREPO_PREFIXES) {
       const candidate = prefix + filePath;
-      const content = await this.githubService.getFileContent(
-        installationId, owner, repo, candidate, ref,
-      );
+      const content = await scmProvider.fetchFile(config, candidate, ref);
       if (content != null) {
         this.logger.log(
           `[FILE_PATCH] resolveRepoFile — ${filePath} → ${candidate} ` +
@@ -525,7 +499,6 @@ export class FixRequestProcessor extends WorkerHost {
       );
     }
 
-    // None found — return original path as fallback
     this.logger.warn(
       `[FILE_PATCH] resolveRepoFile — could not resolve ${filePath} with any prefix, using as-is`,
     );
@@ -538,13 +511,6 @@ export class FixRequestProcessor extends WorkerHost {
    * fixedCode is a JSON array of line-level fixes:
    *   [{ action: "replace", lineNumber: 52, originalLine: "  const x = foo(bar);", fixedLine: "  const x = foo(Number(bar));" }]
    *   [{ action: "insert_after", lineNumber: 4, originalLine: "", fixedLine: "import { ConfigService } from '@nestjs/common';" }]
-   *
-   * - "replace": validates originalLine matches, then replaces. Skips if mismatch (safety).
-   * - "insert_after": inserts a new line AFTER the specified lineNumber. lineNumber=0 inserts at top.
-   * - Fixes are processed bottom-to-top so inserts don't shift line numbers of earlier fixes.
-   *
-   * Only the listed lines are touched. All other code stays exactly as-is.
-   * This makes it physically impossible for the LLM to delete unrelated code.
    */
   private applyFixAtLine(
     filePath: string,
@@ -559,7 +525,6 @@ export class FixRequestProcessor extends WorkerHost {
       return originalContent ?? '';
     }
 
-    // Parse the line-fix JSON from the LLM
     let lineFixes: Array<{ action?: string; lineNumber: number; originalLine?: string; fixedLine: string }> = [];
     try {
       lineFixes = JSON.parse(fixedCode) as typeof lineFixes;
@@ -582,8 +547,6 @@ export class FixRequestProcessor extends WorkerHost {
         `originalLines=${String(lines.length)} fixes=${String(lineFixes.length)}`,
     );
 
-    // Sort fixes by lineNumber DESCENDING so inserts don't shift line numbers
-    // of fixes that come earlier in the file.
     const sortedFixes = [...lineFixes].sort((a, b) => b.lineNumber - a.lineNumber);
 
     let appliedCount = 0;
@@ -592,8 +555,7 @@ export class FixRequestProcessor extends WorkerHost {
       const action = fix.action ?? 'replace';
 
       if (action === 'insert_after') {
-        // Insert a new line AFTER the specified lineNumber (0 = insert at top)
-        const insertIdx = fix.lineNumber; // 0-based position to splice AFTER
+        const insertIdx = fix.lineNumber;
         if (insertIdx < 0 || insertIdx > lines.length) {
           this.logger.warn(
             `[FILE_PATCH] insert_after line ${String(fix.lineNumber)} out of range — skipping`,
@@ -607,8 +569,7 @@ export class FixRequestProcessor extends WorkerHost {
         lines.splice(insertIdx, 0, fix.fixedLine);
         appliedCount++;
       } else {
-        // Replace: validate originalLine matches before overwriting
-        const idx = fix.lineNumber - 1; // 0-based
+        const idx = fix.lineNumber - 1;
         if (idx < 0 || idx >= lines.length) {
           this.logger.warn(
             `[FILE_PATCH] Line ${String(fix.lineNumber)} out of range (file has ${String(lines.length)} lines) — skipping`,
@@ -616,7 +577,6 @@ export class FixRequestProcessor extends WorkerHost {
           continue;
         }
 
-        // Validate originalLine if provided (trim whitespace for comparison)
         const currentLine = lines[idx]!;
         if (fix.originalLine && fix.originalLine.trim().length > 0) {
           if (currentLine.trim() !== fix.originalLine.trim()) {
@@ -647,12 +607,11 @@ export class FixRequestProcessor extends WorkerHost {
   }
 
   private async createFixPr(
+    scmProvider: CiProviderBase,
+    config: CiConnectionConfig,
     agentBranch: string,
     targetBranch: string,
     pipelineRunId: string,
-    installationId: string,
-    owner: string,
-    repo: string,
   ): Promise<void> {
     try {
       const existingPr = await this.pullRequestsRepository.findOpenPrBySourceBranch(agentBranch);
@@ -661,7 +620,7 @@ export class FixRequestProcessor extends WorkerHost {
         return;
       }
 
-      const result = await this.githubService.createPR(installationId, owner, repo, {
+      const result = await scmProvider.createPullRequest(config, {
         title: `fix(healops): Auto-fix pipeline errors`,
         body: [
           '## HealOps Automated Fix',

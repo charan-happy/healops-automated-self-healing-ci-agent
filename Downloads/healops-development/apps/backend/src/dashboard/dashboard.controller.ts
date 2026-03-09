@@ -2,11 +2,12 @@
 // Exposes aggregate repair metrics, recent jobs, trends, and cost breakdowns
 // for the HealOps dashboard UI.
 
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RouteNames } from '@common/route-names';
 import { CurrentUser } from '@auth/decorators/current-user.decorator';
 import { AuthUser } from '@auth/interfaces/auth-user.interface';
+import { MembershipRepository } from '@db/repositories/healops/membership.repository';
 import { DashboardService } from './dashboard.service';
 import { MetricsQueryDto } from './dto/metrics-query.dto';
 import { RecentJobsQueryDto } from './dto/recent-jobs-query.dto';
@@ -16,7 +17,10 @@ import { CostBreakdownQueryDto } from './dto/cost-breakdown-query.dto';
 @Controller({ path: RouteNames.HEALOPS_DASHBOARD, version: '1' })
 @ApiTags('Dashboard')
 export class DashboardController {
-  constructor(private readonly dashboardService: DashboardService) {}
+  constructor(
+    private readonly dashboardService: DashboardService,
+    private readonly membershipRepository: MembershipRepository,
+  ) {}
 
   @Get('metrics')
   @ApiOperation({ summary: 'Aggregate repair metrics' })
@@ -29,7 +33,7 @@ export class DashboardController {
     @Query() query: MetricsQueryDto,
     @CurrentUser() user: AuthUser,
   ) {
-    const organizationId = query.organizationId ?? user.id;
+    const orgId = query.organizationId ?? await this.resolveOrganizationId(user.id);
     const dateRange =
       query.startDate || query.endDate
         ? {
@@ -37,7 +41,7 @@ export class DashboardController {
             ...(query.endDate !== undefined ? { endDate: query.endDate } : {}),
           }
         : undefined;
-    return this.dashboardService.getMetrics(organizationId, dateRange);
+    return this.dashboardService.getMetrics(orgId, dateRange);
   }
 
   @Get('recent-jobs')
@@ -51,15 +55,10 @@ export class DashboardController {
     @Query() query: RecentJobsQueryDto,
     @CurrentUser() user: AuthUser,
   ) {
-    const organizationId = query.organizationId ?? user.id;
+    const orgId = query.organizationId ?? await this.resolveOrganizationId(user.id);
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
-    return this.dashboardService.getRecentJobs(
-      organizationId,
-      limit,
-      offset,
-      query.status,
-    );
+    return this.dashboardService.getRecentJobs(orgId, limit, offset, query.status);
   }
 
   @Get('trends')
@@ -73,9 +72,9 @@ export class DashboardController {
     @Query() query: TrendsQueryDto,
     @CurrentUser() user: AuthUser,
   ) {
-    const organizationId = query.organizationId ?? user.id;
+    const orgId = query.organizationId ?? await this.resolveOrganizationId(user.id);
     const period = query.period ?? '30d';
-    return this.dashboardService.getTrends(organizationId, period);
+    return this.dashboardService.getTrends(orgId, period);
   }
 
   @Get('cost-breakdown')
@@ -89,7 +88,31 @@ export class DashboardController {
     @Query() query: CostBreakdownQueryDto,
     @CurrentUser() user: AuthUser,
   ) {
-    const organizationId = query.organizationId ?? user.id;
-    return this.dashboardService.getCostBreakdown(organizationId);
+    const orgId = query.organizationId ?? await this.resolveOrganizationId(user.id);
+    return this.dashboardService.getCostBreakdown(orgId);
+  }
+
+  @Get('repo-health')
+  @ApiOperation({ summary: 'Per-repository health status' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Returns health status, fix stats, and open issues per repository',
+  })
+  async getRepoHealth(@CurrentUser() user: AuthUser) {
+    const orgId = await this.resolveOrganizationId(user.id);
+    return this.dashboardService.getRepoHealth(orgId);
+  }
+
+  private async resolveOrganizationId(userId: string): Promise<string> {
+    const memberships =
+      await this.membershipRepository.findOrganizationsByUser(userId);
+    const membership = memberships[0];
+    if (!membership) {
+      throw new BadRequestException(
+        'No organization found. Please complete onboarding first.',
+      );
+    }
+    return membership.organizationId;
   }
 }

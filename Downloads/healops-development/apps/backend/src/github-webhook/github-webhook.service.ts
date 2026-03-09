@@ -338,6 +338,10 @@ export class GithubWebhookService {
     const owner = parts.length >= 2 ? (parts[0] ?? '') : '';
     const repo = parts.length >= 2 ? (parts[1] ?? '') : repository.name;
 
+    const installationId = repository.githubInstallationId
+      ?? this.configService.get<string>('GITHUB_INSTALLATION_ID')
+      ?? '';
+
     try {
       const { jobId } = await this.fixRequestQueue.addBatchFixRequest({
         buildErrors: errors,
@@ -345,9 +349,15 @@ export class GithubWebhookService {
         commitSha: headSha,
         pipelineRunId,
         repositoryId: repository.id,
-        githubInstallationId: repository.githubInstallationId
-          ?? this.configService.get<string>('GITHUB_INSTALLATION_ID')
-          ?? '',
+        organizationId: repository.organizationId,
+        scmProvider: 'github',
+        scmConnectionConfig: {
+          owner,
+          repo,
+          authToken: installationId,
+        },
+        // backward compat
+        githubInstallationId: installationId,
         owner,
         repo,
       });

@@ -83,7 +83,13 @@ export interface IWebhookIngestJobData {
     defaultBranch: string;
     primaryLanguage: string | null;
     githubInstallationId: string | null;
+    provider?: string;
   };
+  // Normalised webhook context (populated by CiWebhookService for non-GitHub providers)
+  headBranch?: string;
+  headSha?: string;
+  externalRunId?: string;
+  workflowName?: string;
 }
 
 export interface IDLQFailedJobData {

@@ -295,6 +295,7 @@ import type {
   RecentJob,
   TrendDataPoint,
   CostBreakdownItem,
+  RepoHealth,
 } from "./types/dashboard";
 
 // Try to refresh the access token using the stored refresh token
@@ -375,9 +376,14 @@ export async function fetchDashboardMetrics(): Promise<DashboardMetrics | null> 
 export async function fetchRecentJobs(
   limit = 20,
 ): Promise<RecentJob[] | null> {
-  return fetchApi<RecentJob[]>(
+  const result = await fetchApi<{ data: RecentJob[]; total: number }>(
     `/v1/healops/dashboard/recent-jobs?limit=${limit}`,
   );
+  return result?.data ?? null;
+}
+
+export async function fetchRepoHealth(): Promise<RepoHealth[] | null> {
+  return fetchApi<RepoHealth[]>("/v1/healops/dashboard/repo-health");
 }
 
 export async function fetchTrendData(

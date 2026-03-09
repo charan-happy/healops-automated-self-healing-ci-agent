@@ -2,17 +2,22 @@
 // Provider-agnostic webhook processing service.
 // Takes a normalised WebhookPayloadResult and runs the guard chain
 // (duplicate check, healops branch check, cooldown check, budget check)
-// then dispatches to the repair pipeline via BullMQ.
+// then extracts errors from CI logs and dispatches to the AI fix pipeline.
 
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WebhookPayloadResult } from '../ci-provider/interfaces/ci-provider.interface';
+import { CiProviderFactory } from '../ci-provider/ci-provider.factory';
+import { CiConnectionConfig } from '../ci-provider/interfaces/ci-provider.interface';
 import { WebhookEventsRepository } from '@db/repositories/healops/webhook-events.repository';
 import { PlatformRepository } from '@db/repositories/healops/platform.repository';
 import { CostTrackingRepository } from '@db/repositories/healops/cost-tracking.repository';
 import { CostTrackingService } from '@cost-tracking/cost-tracking.service';
 import { HealopsJobsRepository } from '@db/repositories/healops/jobs.repository';
+import { ScmProviderConfigsRepository } from '@db/repositories/healops/scm-provider-configs.repository';
 import { WebhookIngestQueueService } from '@bg/queue/webhook-ingest/webhook-ingest-queue.service';
+import { FixRequestQueue } from '@bg/queue/fix-request/fix-request.queue';
+import { ErrorExtractorService } from './error-extractor.service';
 
 export interface ProcessWebhookInput {
   /** Provider name: 'github' | 'gitlab' | 'jenkins' */
@@ -37,6 +42,10 @@ export class CiWebhookService {
     private readonly costTrackingService: CostTrackingService,
     private readonly jobsRepository: HealopsJobsRepository,
     private readonly webhookIngestQueueService: WebhookIngestQueueService,
+    private readonly ciProviderFactory: CiProviderFactory,
+    private readonly errorExtractorService: ErrorExtractorService,
+    private readonly fixRequestQueue: FixRequestQueue,
+    private readonly scmProviderConfigsRepository: ScmProviderConfigsRepository,
   ) {}
 
   /**
@@ -84,7 +93,12 @@ export class CiWebhookService {
           defaultBranch: repository.defaultBranch,
           primaryLanguage: repository.primaryLanguage,
           githubInstallationId: repository.githubInstallationId,
+          provider,
         },
+        headBranch: payload.headBranch,
+        headSha: payload.headSha,
+        ...(payload.externalRunId ? { externalRunId: payload.externalRunId } : {}),
+        ...(payload.workflowName ? { workflowName: payload.workflowName } : {}),
       });
 
       this.logger.log(
@@ -106,15 +120,20 @@ export class CiWebhookService {
   async processEventAsync(
     webhookEventId: string,
     eventType: string,
-    payload: WebhookPayloadResult,
     repository: ResolvedRepository,
+    context: {
+      headBranch: string;
+      headSha: string;
+      externalRunId?: string;
+      workflowName?: string;
+    },
   ): Promise<void> {
     try {
       // Handle push events — supersede active jobs on same branch
       if (eventType === 'push') {
         await this.handlePushSupersede(
           repository.id,
-          payload.headBranch,
+          context.headBranch,
           webhookEventId,
         );
         return;
@@ -130,7 +149,7 @@ export class CiWebhookService {
       }
 
       // ── Guard 1: Is this a HealOps branch? ─────────────────────────────
-      const headBranch = payload.headBranch;
+      const headBranch = context.headBranch;
       const branchRecord = await this.platformRepository.findBranchByRepoAndName(
         repository.id,
         headBranch,
@@ -162,7 +181,7 @@ export class CiWebhookService {
       this.logger.log('Guard 1: Not a HealOps branch — continuing');
 
       // ── Guard 2: Is this a HealOps commit? ─────────────────────────────
-      const headSha = payload.headSha;
+      const headSha = context.headSha;
       if (headSha) {
         const commitRecord = await this.platformRepository.findCommitByRepoAndSha(
           repository.id,
@@ -215,10 +234,101 @@ export class CiWebhookService {
       }
       this.logger.log('Guard 4: Budget available — continuing');
 
-      // ── All guards passed — mark for repair dispatch ───────────────────
+      // ── All guards passed — extract errors and dispatch fix ─────────────
       this.logger.log(
-        `All guards passed for ${webhookEventId}, ready for repair dispatch`,
+        `All guards passed for ${webhookEventId}, extracting errors and dispatching fix`,
       );
+
+      const provider = repository.provider ?? 'unknown';
+      const externalRunId = context.externalRunId ?? '';
+
+      // 1. Fetch logs from CI provider
+      let rawLogs: string | null = null;
+      try {
+        const ciProvider = this.ciProviderFactory.getProvider(provider);
+        const ciConfig = this.ciProviderFactory.buildConnectionConfig({
+          name: repository.name,
+          provider,
+        });
+        rawLogs = await ciProvider.fetchLogs(ciConfig, externalRunId);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to fetch logs from ${provider} for run ${externalRunId}: ${(error as Error).message}`,
+        );
+      }
+
+      if (!rawLogs) {
+        await this.webhookEventsRepository.markProcessed(
+          webhookEventId,
+          'Could not fetch CI logs — no errors to extract',
+        );
+        return;
+      }
+
+      // 2. Extract build errors from logs
+      const language = repository.primaryLanguage ?? 'typescript';
+      const buildErrors = this.errorExtractorService.extractBuildErrors(rawLogs, language);
+
+      if (buildErrors.length === 0) {
+        await this.webhookEventsRepository.markProcessed(
+          webhookEventId,
+          'No parseable build errors found in logs',
+        );
+        return;
+      }
+
+      this.logger.log(
+        `Extracted ${String(buildErrors.length)} build error(s) from ${provider} logs`,
+      );
+
+      // 3. Resolve SCM provider for branch/push/PR operations
+      const { scmProviderName, scmConfig } = await this.resolveScmProvider(repository);
+
+      // 4. Resolve pipeline context (create branch/commit/pipeline_run records)
+      const pipelineRunId = await this.resolvePipelineRunId(
+        webhookEventId, repository, context,
+      );
+
+      // 5. Dispatch batch fix job
+      const errors = buildErrors.map((e) => ({
+        errorMessage: e.extractedErrorMessage || e.errorMessage,
+        codeSnippet: e.codeSnippet,
+        lineNumber: e.errorLine,
+        branch: headBranch,
+        commitSha: headSha,
+        filePath: e.errorFile,
+        language: e.language,
+      }));
+
+      try {
+        const { jobId } = await this.fixRequestQueue.addBatchFixRequest({
+          buildErrors: errors,
+          branch: headBranch,
+          commitSha: headSha,
+          pipelineRunId,
+          repositoryId: repository.id,
+          organizationId: repository.organizationId,
+          scmProvider: scmProviderName,
+          scmConnectionConfig: {
+            owner: scmConfig.owner,
+            repo: scmConfig.repo,
+            authToken: scmConfig.authToken,
+            ...(scmConfig.serverUrl ? { serverUrl: scmConfig.serverUrl } : {}),
+          },
+          // backward compat
+          ...(repository.githubInstallationId ? { githubInstallationId: repository.githubInstallationId } : {}),
+        });
+
+        this.logger.log(
+          `[AI_FIX] Batch job ${jobId} dispatched with ${String(buildErrors.length)} error(s) ` +
+            `for ${headBranch}@${headSha.slice(0, 8)} via ${scmProviderName}`,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `[AI_FIX] Failed to dispatch batch job: ${(error as Error).message}`,
+        );
+      }
+
       await this.webhookEventsRepository.markProcessed(webhookEventId);
     } catch (error) {
       await this.webhookEventsRepository.markProcessed(
@@ -230,6 +340,171 @@ export class CiWebhookService {
         (error as Error).stack,
       );
     }
+  }
+
+  // ─── SCM Provider Resolution ──────────────────────────────────────────────
+
+  /**
+   * Determine which SCM provider to use for branch/push/PR operations.
+   * GitHub and GitLab repos use themselves as SCM.
+   * Jenkins repos delegate to the org's SCM provider (GitLab or GitHub).
+   */
+  private async resolveScmProvider(
+    repository: ResolvedRepository,
+  ): Promise<{ scmProviderName: string; scmConfig: CiConnectionConfig }> {
+    const provider = repository.provider ?? 'github';
+
+    if (provider === 'github') {
+      const parts = repository.name.split('/');
+      return {
+        scmProviderName: 'github',
+        scmConfig: {
+          owner: parts[0] ?? '',
+          repo: parts[1] ?? repository.name,
+          authToken: repository.githubInstallationId ?? '',
+        },
+      };
+    }
+
+    if (provider === 'gitlab') {
+      const scmConfigs = await this.scmProviderConfigsRepository.findConfigsByOrganization(
+        repository.organizationId,
+      );
+      const gitlabConfig = scmConfigs.find(
+        (c: { isActive?: boolean; providerType: string }) =>
+          c.isActive !== false && c.providerType === 'gitlab',
+      );
+      const configData = (gitlabConfig?.config as Record<string, string>) ?? {};
+      return {
+        scmProviderName: 'gitlab',
+        scmConfig: {
+          owner: '',
+          repo: repository.name,
+          authToken: configData['accessToken']
+            ?? this.configService.get<string>('GITLAB_TOKEN')
+            ?? '',
+          serverUrl: configData['serverUrl']
+            ?? this.configService.get<string>('GITLAB_URL'),
+        },
+      };
+    }
+
+    // Jenkins is CI-only — use the org's SCM provider for source operations
+    if (provider === 'jenkins') {
+      const scmConfigs = await this.scmProviderConfigsRepository.findConfigsByOrganization(
+        repository.organizationId,
+      );
+      const scmConfig = scmConfigs.find(
+        (c: { isActive?: boolean }) => c.isActive !== false,
+      );
+      if (!scmConfig) {
+        this.logger.warn(
+          `No SCM provider configured for Jenkins repo ${repository.name}, falling back to env`,
+        );
+        return {
+          scmProviderName: 'gitlab',
+          scmConfig: {
+            owner: '',
+            repo: repository.name,
+            authToken: this.configService.get<string>('GITLAB_TOKEN') ?? '',
+            serverUrl: this.configService.get<string>('GITLAB_URL'),
+          },
+        };
+      }
+      const configData = (scmConfig.config as Record<string, string>) ?? {};
+      return {
+        scmProviderName: scmConfig.providerType,
+        scmConfig: this.ciProviderFactory.buildConnectionConfig({
+          name: repository.name,
+          provider: scmConfig.providerType,
+          authToken: configData['accessToken'],
+        }),
+      };
+    }
+
+    // Unknown provider — try to use env vars
+    return {
+      scmProviderName: provider,
+      scmConfig: this.ciProviderFactory.buildConnectionConfig({
+        name: repository.name,
+        provider,
+      }),
+    };
+  }
+
+  // ─── Pipeline Run Resolution ──────────────────────────────────────────────
+
+  /**
+   * Find or create a pipeline_run record for this webhook event.
+   * Returns the pipeline run ID.
+   */
+  private async resolvePipelineRunId(
+    webhookEventId: string,
+    repository: ResolvedRepository,
+    context: {
+      headBranch: string;
+      headSha: string;
+      externalRunId?: string;
+      workflowName?: string;
+    },
+  ): Promise<string> {
+    // Try to find existing pipeline run by external run ID
+    const externalRunId = context.externalRunId ?? webhookEventId;
+    const existing = await this.webhookEventsRepository.findPipelineRunByExternalId(externalRunId);
+    if (existing) return existing.id;
+
+    // Find or create branch + commit + pipeline_run records
+    const branchName = context.headBranch || repository.defaultBranch;
+    let branch = await this.platformRepository.findBranchByRepoAndName(
+      repository.id, branchName,
+    );
+    if (!branch) {
+      branch = await this.platformRepository.createBranch({
+        repositoryId: repository.id,
+        name: branchName,
+      });
+    }
+    if (!branch) {
+      // Race: another worker created it between find and create
+      branch = await this.platformRepository.findBranchByRepoAndName(
+        repository.id, branchName,
+      );
+    }
+    if (!branch) throw new Error(`Failed to resolve branch "${branchName}"`);
+
+    const commitSha = context.headSha || 'unknown';
+    let commit = await this.platformRepository.findCommitByRepoAndSha(
+      repository.id, commitSha,
+    );
+    if (!commit) {
+      commit = await this.platformRepository.createCommit({
+        repositoryId: repository.id,
+        branchId: branch.id,
+        commitSha,
+        author: 'unknown',
+        message: '',
+        source: 'webhook',
+        committedAt: new Date(),
+      });
+    }
+    if (!commit) {
+      commit = await this.platformRepository.findCommitByRepoAndSha(
+        repository.id, commitSha,
+      );
+    }
+    if (!commit) throw new Error(`Failed to resolve commit "${commitSha}"`);
+
+    const pipelineRun = await this.webhookEventsRepository.createPipelineRun({
+      commitId: commit.id,
+      webhookEventId,
+      externalRunId,
+      workflowName: context.workflowName ?? null,
+      provider: repository.provider ?? 'unknown',
+      status: 'failed',
+    });
+    if (!pipelineRun) throw new Error(`Failed to create pipeline run for ${externalRunId}`);
+
+    return pipelineRun.id;
   }
 
   // ─── Push Supersede ───────────────────────────────────────────────────────
@@ -337,4 +612,5 @@ export type ResolvedRepository = {
   defaultBranch: string;
   primaryLanguage: string | null;
   githubInstallationId: string | null;
+  provider?: string;
 };
