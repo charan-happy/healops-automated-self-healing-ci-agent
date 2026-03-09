@@ -308,7 +308,8 @@ export class ProjectsService {
   private deriveRepoIdentifier(providerType: string, externalRepoId: string, nameParts: string[]): string {
     if (providerType === 'gitlab') return externalRepoId;
     if (providerType === 'github') return nameParts[1] ?? nameParts[0] ?? '';
-    // Jenkins and others: use short repo name
+    // Jenkins: return empty so the provider discovers ALL jobs on the instance
+    if (providerType === 'jenkins') return '';
     return nameParts[1] ?? nameParts[0] ?? '';
   }
 
