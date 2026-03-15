@@ -17,7 +17,7 @@ name: Deploy to OCI (PM2)
 
 on:
   push:
-    branches: [main, development]
+    branches: [main]
     paths-ignore:
       - 'Infrastructure/**'
       - '*.md'
@@ -58,12 +58,22 @@ jobs:
             echo "══════════════════════════════════════════════════════"
 
             # ── 1. Clone fresh copy ──────────────────────────────────
-            STAGING_DIR="/home/ubuntu/healops-staging-${SHORT_SHA}"
-            echo "==> Cloning ${DEPLOY_BRANCH} to staging dir..."
-            rm -rf "$STAGING_DIR"
+            CLONE_DIR="/home/ubuntu/healops-clone-${SHORT_SHA}"
+            echo "==> Cloning ${DEPLOY_BRANCH} to clone dir..."
+            rm -rf "$CLONE_DIR"
             git clone --branch "$DEPLOY_BRANCH" --depth 1 \
               "https://x-access-token:${DEPLOY_TOKEN}@github.com/${{ github.repository }}.git" \
-              "$STAGING_DIR"
+              "$CLONE_DIR"
+
+            # The repo has code under Downloads/healops-development/
+            STAGING_DIR="$CLONE_DIR/Downloads/healops-development"
+
+            if [ ! -d "$STAGING_DIR/apps" ]; then
+              echo "ERROR: apps/ not found in Downloads/healops-development/"
+              echo "Available dirs:" && ls "$CLONE_DIR/" | head -10
+              rm -rf "$CLONE_DIR"
+              exit 1
+            fi
 
             # ── 2. Preserve server config ────────────────────────────
             echo "==> Copying server .env files..."
@@ -93,7 +103,7 @@ jobs:
 
             if [ $BUILD_BACKEND -ne 0 ]; then
               echo "Backend build FAILED — aborting deploy"
-              rm -rf "$STAGING_DIR"
+              rm -rf "$CLONE_DIR"
               exit 1
             fi
 
@@ -106,7 +116,7 @@ jobs:
 
             if [ $BUILD_FRONTEND -ne 0 ]; then
               echo "Frontend build FAILED — aborting deploy"
-              rm -rf "$STAGING_DIR"
+              rm -rf "$CLONE_DIR"
               exit 1
             fi
 
@@ -177,8 +187,10 @@ jobs:
               exit 1
             fi
 
-            # Clean up old backup (keep only latest)
+            # Clean up clone dir and old backups (keep only latest)
+            rm -rf "$CLONE_DIR"
             find /home/ubuntu -maxdepth 1 -name "healops-backup-*" -type d | sort | head -n -1 | xargs rm -rf 2>/dev/null || true
+            find /home/ubuntu -maxdepth 1 -name "healops-clone-*" -type d -exec rm -rf {} + 2>/dev/null || true
 
             echo "══════════════════════════════════════════════════════"
             echo "  Deploy SUCCESS — ${DEPLOY_BRANCH}@${SHORT_SHA}"
