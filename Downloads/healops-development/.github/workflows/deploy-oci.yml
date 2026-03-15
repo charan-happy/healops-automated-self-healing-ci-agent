@@ -141,14 +141,14 @@ jobs:
 
             # Backend
             NODE_ENV=production PORT=4000 TS_NODE_PROJECT=tsconfig.prod-paths.json \
-              pm2 start apps/backend/dist/main.js --name healops-backend \
+              pm2 start dist/main.js --name healops-backend \
               --node-args="-r tsconfig-paths/register" \
               --cwd "$DEPLOY_DIR/apps/backend" \
               2>&1 | tail -3
 
             # Worker
             NODE_ENV=production TS_NODE_PROJECT=tsconfig.prod-paths.json \
-              pm2 start apps/backend/dist/worker.main.js --name healops-worker \
+              pm2 start dist/worker.main.js --name healops-worker \
               --node-args="-r tsconfig-paths/register" \
               --cwd "$DEPLOY_DIR/apps/backend" \
               2>&1 | tail -3
