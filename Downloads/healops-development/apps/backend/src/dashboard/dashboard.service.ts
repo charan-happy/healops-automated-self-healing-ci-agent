@@ -1,13 +1,16 @@
 // ─── Dashboard Service ──────────────────────────────────────────────────────
 // Aggregates repair metrics, trends, recent jobs, and cost breakdowns
 // for the HealOps dashboard.
+//
+// Join strategy: jobs → fix_requests (via fixRequestId) → repositories
+// (via commitSha match to commits table). The pipeline stores errors in
+// fix_requests, NOT in the failures table.
 
 import { Injectable, Logger } from '@nestjs/common';
 import { DBService } from '@db/db.service';
 import { DashboardRepository } from '@db/repositories/healops/dashboard.repository';
 import { jobs } from '@db/schema/agent';
-import { failures } from '@db/schema/analysis';
-import { pipelineRuns } from '@db/schema/ingestion';
+import { fixRequests } from '@db/schema/fix-requests';
 import { repositories } from '@db/schema/platform';
 import { costTracking } from '@db/schema/operations';
 import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
@@ -16,6 +19,16 @@ import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
 const DEVELOPER_TIME_SAVED_MINUTES = 30;
 // Average developer hourly rate for cost savings calculation
 const DEVELOPER_HOURLY_RATE_USD = 75;
+
+/**
+ * SQL fragment to join fix_requests → commits → branches → repositories
+ * by matching fix_requests.commit_sha to commits.commit_sha.
+ */
+const FIX_REQUEST_TO_REPO_JOIN = sql`${fixRequests.commitSha} IN (
+  SELECT c.commit_sha FROM commits c
+  INNER JOIN branches b ON c.branch_id = b.id
+  WHERE b.repository_id = ${repositories.id}
+)`;
 
 export interface MetricsResult {
   mttr: number;
@@ -71,7 +84,6 @@ export class DashboardService {
     const startDate = dateRange?.startDate ?? defaultStartDate.toISOString().slice(0, 10);
     const endDate = dateRange?.endDate ?? now.toISOString().slice(0, 10);
 
-    // Calculate the previous period of equal length for trend comparison
     const start = new Date(startDate);
     const end = new Date(endDate);
     const periodMs = end.getTime() - start.getTime();
@@ -118,16 +130,8 @@ export class DashboardService {
           avgFixTimeMs: sql<number>`avg(EXTRACT(EPOCH FROM (${jobs.completedAt} - ${jobs.startedAt})) * 1000) FILTER (WHERE ${jobs.status} = 'success' AND ${jobs.completedAt} IS NOT NULL AND ${jobs.startedAt} IS NOT NULL)`,
         })
         .from(jobs)
-        .innerJoin(failures, eq(jobs.failureId, failures.id))
-        .innerJoin(pipelineRuns, eq(failures.pipelineRunId, pipelineRuns.id))
-        .innerJoin(
-          repositories,
-          sql`${pipelineRuns.commitId} IN (
-            SELECT c.id FROM commits c
-            INNER JOIN branches b ON c.branch_id = b.id
-            WHERE b.repository_id = ${repositories.id}
-          )`,
-        )
+        .innerJoin(fixRequests, eq(jobs.fixRequestId, fixRequests.id))
+        .innerJoin(repositories, FIX_REQUEST_TO_REPO_JOIN)
         .where(
           and(
             eq(repositories.organizationId, organizationId),
@@ -184,16 +188,8 @@ export class DashboardService {
             completedAt: jobs.completedAt,
           })
           .from(jobs)
-          .innerJoin(failures, eq(jobs.failureId, failures.id))
-          .innerJoin(pipelineRuns, eq(failures.pipelineRunId, pipelineRuns.id))
-          .innerJoin(
-            repositories,
-            sql`${pipelineRuns.commitId} IN (
-              SELECT c.id FROM commits c
-              INNER JOIN branches b ON c.branch_id = b.id
-              WHERE b.repository_id = ${repositories.id}
-            )`,
-          )
+          .innerJoin(fixRequests, eq(jobs.fixRequestId, fixRequests.id))
+          .innerJoin(repositories, FIX_REQUEST_TO_REPO_JOIN)
           .where(whereClause)
           .orderBy(desc(jobs.createdAt))
           .limit(limit)
@@ -201,16 +197,8 @@ export class DashboardService {
         this.dbService.db
           .select({ total: sql<number>`count(*)::int` })
           .from(jobs)
-          .innerJoin(failures, eq(jobs.failureId, failures.id))
-          .innerJoin(pipelineRuns, eq(failures.pipelineRunId, pipelineRuns.id))
-          .innerJoin(
-            repositories,
-            sql`${pipelineRuns.commitId} IN (
-              SELECT c.id FROM commits c
-              INNER JOIN branches b ON c.branch_id = b.id
-              WHERE b.repository_id = ${repositories.id}
-            )`,
-          )
+          .innerJoin(fixRequests, eq(jobs.fixRequestId, fixRequests.id))
+          .innerJoin(repositories, FIX_REQUEST_TO_REPO_JOIN)
           .where(whereClause),
       ]);
 
@@ -223,7 +211,7 @@ export class DashboardService {
           status: row.status,
           repoName: row.repoName,
           errorType: row.errorType,
-          prLink: null, // PR link resolved separately if needed
+          prLink: null,
           createdAt: row.createdAt,
           completedAt: row.completedAt,
         })),
@@ -251,16 +239,8 @@ export class DashboardService {
           failedJobs: sql<number>`count(*) FILTER (WHERE ${jobs.status} = 'failed')::int`,
         })
         .from(jobs)
-        .innerJoin(failures, eq(jobs.failureId, failures.id))
-        .innerJoin(pipelineRuns, eq(failures.pipelineRunId, pipelineRuns.id))
-        .innerJoin(
-          repositories,
-          sql`${pipelineRuns.commitId} IN (
-            SELECT c.id FROM commits c
-            INNER JOIN branches b ON c.branch_id = b.id
-            WHERE b.repository_id = ${repositories.id}
-          )`,
-        )
+        .innerJoin(fixRequests, eq(jobs.fixRequestId, fixRequests.id))
+        .innerJoin(repositories, FIX_REQUEST_TO_REPO_JOIN)
         .where(
           and(
             eq(repositories.organizationId, organizationId),
@@ -342,16 +322,8 @@ export class DashboardService {
           lastFixAt: sql<string>`max(${jobs.completedAt})::text`,
         })
         .from(jobs)
-        .innerJoin(failures, eq(jobs.failureId, failures.id))
-        .innerJoin(pipelineRuns, eq(failures.pipelineRunId, pipelineRuns.id))
-        .innerJoin(
-          repositories,
-          sql`${pipelineRuns.commitId} IN (
-            SELECT c.id FROM commits c
-            INNER JOIN branches b ON c.branch_id = b.id
-            WHERE b.repository_id = ${repositories.id}
-          )`,
-        )
+        .innerJoin(fixRequests, eq(jobs.fixRequestId, fixRequests.id))
+        .innerJoin(repositories, FIX_REQUEST_TO_REPO_JOIN)
         .where(eq(repositories.organizationId, organizationId))
         .groupBy(repositories.name);
 
