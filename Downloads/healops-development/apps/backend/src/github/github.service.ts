@@ -470,6 +470,32 @@ export class GithubService {
   }
 
   /**
+   * List all branches of a repository via the GitHub App.
+   */
+  async listBranches(
+    installationId: string,
+    owner: string,
+    repo: string,
+  ): Promise<Array<{ name: string; isProtected: boolean }>> {
+    const octokit = await this.githubApp.getInstallationClient(installationId);
+    const branches: Array<{ name: string; isProtected: boolean }> = [];
+    let page = 1;
+    const perPage = 100;
+
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, no-constant-condition
+    while (true) {
+      const { data } = await octokit.repos.listBranches({ owner, repo, per_page: perPage, page });
+      for (const b of data) {
+        branches.push({ name: b.name, isProtected: b.protected });
+      }
+      if (data.length < perPage) break;
+      page++;
+    }
+
+    return branches;
+  }
+
+  /**
    * Expose the app provider for services that need direct Octokit access.
    */
   getAppProvider(): GithubAppProvider {

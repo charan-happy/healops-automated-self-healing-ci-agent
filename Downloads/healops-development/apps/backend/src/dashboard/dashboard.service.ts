@@ -325,4 +325,51 @@ export class DashboardService {
       return [];
     }
   }
+
+  async getRepoHealth(organizationId: string): Promise<Array<{
+    repoName: string;
+    status: string;
+    totalJobs: number;
+    successRate: number;
+    lastFixAt: string | null;
+  }>> {
+    try {
+      const rows = await this.dbService.db
+        .select({
+          repoName: repositories.name,
+          totalJobs: sql<number>`count(*)::int`,
+          succeededJobs: sql<number>`count(*) FILTER (WHERE ${jobs.status} = 'success')::int`,
+          lastFixAt: sql<string>`max(${jobs.completedAt})::text`,
+        })
+        .from(jobs)
+        .innerJoin(failures, eq(jobs.failureId, failures.id))
+        .innerJoin(pipelineRuns, eq(failures.pipelineRunId, pipelineRuns.id))
+        .innerJoin(
+          repositories,
+          sql`${pipelineRuns.commitId} IN (
+            SELECT c.id FROM commits c
+            INNER JOIN branches b ON c.branch_id = b.id
+            WHERE b.repository_id = ${repositories.id}
+          )`,
+        )
+        .where(eq(repositories.organizationId, organizationId))
+        .groupBy(repositories.name);
+
+      return rows.map((row) => {
+        const total = row.totalJobs;
+        const succeeded = row.succeededJobs;
+        const rate = total > 0 ? Math.round((succeeded / total) * 10000) / 100 : 0;
+        return {
+          repoName: row.repoName,
+          status: rate >= 80 ? 'healthy' : rate >= 50 ? 'degraded' : 'critical',
+          totalJobs: total,
+          successRate: rate,
+          lastFixAt: row.lastFixAt,
+        };
+      });
+    } catch (error) {
+      this.logger.error(`Failed to get repo health: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
+    }
+  }
 }
