@@ -33,6 +33,8 @@ import { MembershipRepository } from './repositories/healops/membership.reposito
 import { OnboardingRepository } from './repositories/healops/onboarding.repository';
 import { NotificationSettingsRepository } from './repositories/healops/notification-settings.repository';
 import { DashboardRepository } from './repositories/healops/dashboard.repository';
+import { ReviewsRepository } from './repositories/healops/reviews.repository';
+import { ScmProviderConfigsRepository } from './repositories/healops/scm-provider-configs.repository';
 
 const repositories = [
   AuthRepository,
@@ -65,6 +67,8 @@ const repositories = [
   OnboardingRepository,
   NotificationSettingsRepository,
   DashboardRepository,
+  ReviewsRepository,
+  ScmProviderConfigsRepository,
 ];
 
 @Global()

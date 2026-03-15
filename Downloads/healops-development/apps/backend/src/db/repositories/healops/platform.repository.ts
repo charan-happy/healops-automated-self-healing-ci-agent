@@ -137,6 +137,97 @@ export class PlatformRepository {
     return row;
   }
 
+  // ─── Extended Queries ──────────────────────────────────────────────────
+
+  async findOrganizationBySlug(slug: string) {
+    const [row] = await this.dbService.db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.slug, slug));
+    return row ?? null;
+  }
+
+  async updateOrganization(
+    id: string,
+    data: Partial<typeof organizations.$inferInsert>,
+  ) {
+    const [row] = await this.dbService.db
+      .update(organizations)
+      .set(data)
+      .where(eq(organizations.id, id))
+      .returning();
+    return row ?? null;
+  }
+
+  async findRepositoriesWithBranchCount(organizationId: string) {
+    return this.dbService.db
+      .select({
+        id: repositories.id,
+        organizationId: repositories.organizationId,
+        provider: repositories.provider,
+        externalRepoId: repositories.externalRepoId,
+        name: repositories.name,
+        defaultBranch: repositories.defaultBranch,
+        primaryLanguage: repositories.primaryLanguage,
+        isActive: repositories.isActive,
+        githubInstallationId: repositories.githubInstallationId,
+        ciProviderConfigId: repositories.ciProviderConfigId,
+        createdAt: repositories.createdAt,
+        branchCount: sql<number>`count(${branches.id})::int`,
+      })
+      .from(repositories)
+      .leftJoin(branches, eq(branches.repositoryId, repositories.id))
+      .where(
+        and(
+          eq(repositories.organizationId, organizationId),
+          eq(repositories.isActive, true),
+        ),
+      )
+      .groupBy(repositories.id);
+  }
+
+  async findBranchesByRepository(repositoryId: string) {
+    return this.dbService.db
+      .select()
+      .from(branches)
+      .where(eq(branches.repositoryId, repositoryId))
+      .orderBy(desc(branches.createdAt));
+  }
+
+  async findBranchById(branchId: string) {
+    const [row] = await this.dbService.db
+      .select()
+      .from(branches)
+      .where(eq(branches.id, branchId));
+    return row ?? null;
+  }
+
+  async findCommitsByBranch(branchId: string, limit: number, offset: number) {
+    return this.dbService.db
+      .select()
+      .from(commits)
+      .where(eq(commits.branchId, branchId))
+      .orderBy(desc(commits.committedAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async upsertBranch(data: typeof branches.$inferInsert) {
+    const [row] = await this.dbService.db
+      .insert(branches)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [branches.repositoryId, branches.name],
+        set: {
+          isDefault: data.isDefault,
+          isProtected: data.isProtected,
+        },
+      })
+      .returning();
+    if (!row) throw new Error('Failed to upsert branch');
+    return row;
+  }
+
   // ─── Branches ──────────────────────────────────────────────────────────
 
   async findBranchByRepoAndName(repositoryId: string, name: string) {
