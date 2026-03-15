@@ -1,0 +1,227 @@
+# ─────────────────────────────────────────────────────────────────
+# HealOps — Deploy to Oracle Cloud (PM2)
+# ─────────────────────────────────────────────────────────────────
+# Clones repo on OCI server, installs deps, builds, restarts PM2.
+# Uses the existing PM2 ecosystem for process management.
+#
+# Required GitHub Secrets:
+#   OCI_SSH_KEY            — Private SSH key for ubuntu@OCI server
+#   OCI_HOST               — OCI server IP (e.g. 129.159.19.113)
+#   OCI_SSH_PORT           — SSH port (e.g. 10023)
+#   DEPLOY_GITHUB_TOKEN    — GitHub PAT with repo read access (for git clone)
+#   NEXT_PUBLIC_BACKEND_URL — Frontend backend URL (e.g. https://healops.online/api)
+#   SLACK_WEBHOOK_URL      — (optional) Slack deploy notifications
+# ─────────────────────────────────────────────────────────────────
+
+name: Deploy to OCI (PM2)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'Infrastructure/**'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to OCI Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_GITHUB_TOKEN }}
+          NEXT_PUBLIC_BACKEND_URL: ${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          port: ${{ secrets.OCI_SSH_PORT }}
+          username: ubuntu
+          key: ${{ secrets.OCI_SSH_KEY }}
+          envs: DEPLOY_TOKEN,NEXT_PUBLIC_BACKEND_URL
+          command_timeout: 15m
+          script: |
+            set -e
+
+            # ── Setup Node.js via fnm ────────────────────────────────
+            export FNM_PATH="$HOME/.local/share/fnm"
+            export PATH="$FNM_PATH:$PATH"
+            eval "$(fnm env)"
+
+            DEPLOY_DIR="/home/ubuntu/healops"
+            DEPLOY_BRANCH="${{ github.ref_name }}"
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+
+            echo "══════════════════════════════════════════════════════"
+            echo "  HealOps Deploy — ${DEPLOY_BRANCH}@${SHORT_SHA}"
+            echo "══════════════════════════════════════════════════════"
+
+            # ── 1. Clone fresh copy ──────────────────────────────────
+            STAGING_DIR="/home/ubuntu/healops-staging-${SHORT_SHA}"
+            echo "==> Cloning ${DEPLOY_BRANCH} to staging dir..."
+            rm -rf "$STAGING_DIR"
+            git clone --branch "$DEPLOY_BRANCH" --depth 1 \
+              "https://x-access-token:${DEPLOY_TOKEN}@github.com/${{ github.repository }}.git" \
+              "$STAGING_DIR"
+
+            # ── 2. Preserve server config ────────────────────────────
+            echo "==> Copying server .env files..."
+            cp "$DEPLOY_DIR/apps/backend/.env" "$STAGING_DIR/apps/backend/.env" 2>/dev/null || true
+
+            # Write frontend env with correct backend URL
+            cat > "$STAGING_DIR/apps/frontend/.env.local" <<ENVEOF
+            NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-https://healops.online/api}
+            NEXT_PUBLIC_GITHUB_APP_ID=3092122
+            ENVEOF
+
+            # Copy ecosystem config and tsconfig.prod-paths
+            cp "$DEPLOY_DIR/ecosystem.config.js" "$STAGING_DIR/" 2>/dev/null || true
+            cp "$DEPLOY_DIR/apps/backend/tsconfig.prod-paths.json" "$STAGING_DIR/apps/backend/" 2>/dev/null || true
+
+            # ── 3. Install dependencies ──────────────────────────────
+            echo "==> Installing dependencies..."
+            cd "$STAGING_DIR"
+            pnpm install --frozen-lockfile 2>&1 | tail -5
+
+            # ── 4. Build backend ─────────────────────────────────────
+            echo "==> Building backend..."
+            cd apps/backend
+            pnpm run build 2>&1 | tail -5
+            BUILD_BACKEND=$?
+            cd ../..
+
+            if [ $BUILD_BACKEND -ne 0 ]; then
+              echo "Backend build FAILED — aborting deploy"
+              rm -rf "$STAGING_DIR"
+              exit 1
+            fi
+
+            # ── 5. Build frontend ────────────────────────────────────
+            echo "==> Building frontend..."
+            cd apps/frontend
+            NODE_OPTIONS='--max-old-space-size=2048' pnpm run build 2>&1 | tail -10
+            BUILD_FRONTEND=$?
+            cd ../..
+
+            if [ $BUILD_FRONTEND -ne 0 ]; then
+              echo "Frontend build FAILED — aborting deploy"
+              rm -rf "$STAGING_DIR"
+              exit 1
+            fi
+
+            # Copy static assets for standalone mode
+            if [ -d "apps/frontend/.next/standalone" ]; then
+              cp -r apps/frontend/.next/static apps/frontend/.next/standalone/apps/frontend/.next/static 2>/dev/null || true
+              cp -r apps/frontend/public apps/frontend/.next/standalone/apps/frontend/public 2>/dev/null || true
+            fi
+
+            # ── 6. Swap deploy ───────────────────────────────────────
+            echo "==> Swapping deployment..."
+            pm2 stop all 2>/dev/null || true
+
+            # Backup current deploy
+            BACKUP_DIR="/home/ubuntu/healops-backup-$(date +%Y%m%d%H%M%S)"
+            mv "$DEPLOY_DIR" "$BACKUP_DIR"
+            mv "$STAGING_DIR" "$DEPLOY_DIR"
+
+            # ── 7. Start services ────────────────────────────────────
+            echo "==> Starting PM2 services..."
+            cd "$DEPLOY_DIR"
+
+            # Backend + Worker via ecosystem config
+            pm2 start ecosystem.config.js --env production 2>&1 | tail -5
+
+            # Frontend — use standalone server if available
+            if [ -f "apps/frontend/.next/standalone/apps/frontend/server.js" ]; then
+              PORT=3000 pm2 start apps/frontend/.next/standalone/apps/frontend/server.js \
+                --name healops-frontend 2>&1 | tail -3
+            else
+              pm2 start "npx next start -p 3000" --name healops-frontend \
+                --cwd ./apps/frontend 2>&1 | tail -3
+            fi
+
+            pm2 save
+
+            # ── 8. Health checks ─────────────────────────────────────
+            echo "==> Waiting for services..."
+            sleep 15
+
+            HEALTH_OK=true
+
+            if curl -sf http://localhost:4000/health > /dev/null; then
+              echo "Backend: UP"
+            else
+              echo "Backend: DOWN"
+              HEALTH_OK=false
+            fi
+
+            if curl -sf http://localhost:3000 > /dev/null; then
+              echo "Frontend: UP"
+            else
+              echo "Frontend: DOWN"
+              HEALTH_OK=false
+            fi
+
+            if [ "$HEALTH_OK" = false ]; then
+              echo "Health check FAILED — rolling back..."
+              pm2 stop all 2>/dev/null || true
+              rm -rf "$DEPLOY_DIR"
+              mv "$BACKUP_DIR" "$DEPLOY_DIR"
+              cd "$DEPLOY_DIR"
+              pm2 start ecosystem.config.js --env production 2>/dev/null || true
+              PORT=3000 pm2 start apps/frontend/.next/standalone/apps/frontend/server.js \
+                --name healops-frontend 2>/dev/null || true
+              pm2 save
+              echo "Rolled back to previous deploy"
+              exit 1
+            fi
+
+            # Clean up old backup (keep only latest)
+            find /home/ubuntu -maxdepth 1 -name "healops-backup-*" -type d | sort | head -n -1 | xargs rm -rf 2>/dev/null || true
+
+            echo "══════════════════════════════════════════════════════"
+            echo "  Deploy SUCCESS — ${DEPLOY_BRANCH}@${SHORT_SHA}"
+            echo "══════════════════════════════════════════════════════"
+
+            pm2 list | grep healops
+
+      - name: Notify Slack (Deploy Success)
+        if: success()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "Deploy Success",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deploy to OCI - SUCCESS*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*Branch:* `${{ github.ref_name }}`"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify Slack (Deploy Failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "Deploy Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deploy to OCI - FAILED (auto-rollback)*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*View:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Workflow Run>"
+                  }
+                }
+              ]
+            }
