@@ -454,7 +454,7 @@ export default function SCMProvidersPage() {
                     <li>Then click <strong className="text-foreground">Save</strong> to complete the connection</li>
                   </ol>
                   <a
-                    href="https://github.com/apps/healops-dev/installations/new"
+                    href="https://github.com/apps/healops-charan/installations/new"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-3 inline-flex items-center gap-2 rounded-lg bg-brand-cyan px-4 py-2 text-sm font-semibold text-black hover:bg-brand-cyan/90"

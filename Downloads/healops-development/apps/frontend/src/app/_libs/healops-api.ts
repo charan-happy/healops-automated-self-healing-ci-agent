@@ -764,6 +764,28 @@ export async function fetchScmProviders(): Promise<ScmProviderConfig[] | null> {
   return fetchApi<ScmProviderConfig[]>("/v1/healops/settings/scm-providers");
 }
 
+export async function fetchRepoHealth(): Promise<Array<{
+  id: string;
+  name: string;
+  fullName: string;
+  status: "healthy" | "degraded" | "failing";
+  lastFixAt: string | null;
+  totalFixes: number;
+  successRate: number;
+  openIssues: number;
+}> | null> {
+  return fetchApi<Array<{
+    id: string;
+    name: string;
+    fullName: string;
+    status: "healthy" | "degraded" | "failing";
+    lastFixAt: string | null;
+    totalFixes: number;
+    successRate: number;
+    openIssues: number;
+  }>>("/v1/healops/dashboard/repo-health");
+}
+
 export async function fetchScmAvailableRepos(
   providerConfigId: string,
 ): Promise<ScmAvailableRepo[] | null> {

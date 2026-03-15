@@ -130,7 +130,7 @@ export function StepCIProvider({ data, onUpdate }: Props) {
                   organization. The Installation ID will be captured automatically.
                 </p>
                 <a
-                  href={`https://github.com/apps/healops-dev/installations/new`}
+                  href={`https://github.com/apps/healops-charan/installations/new`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-3 inline-flex items-center gap-2 rounded-lg bg-brand-cyan px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-brand-cyan/90"
