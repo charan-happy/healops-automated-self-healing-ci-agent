@@ -467,3 +467,60 @@ export async function fetchSubscription(): Promise<Subscription | null> {
 export async function fetchUsageStats(): Promise<UsageStats | null> {
   return fetchApi<UsageStats>("/v1/healops/billing/usage");
 }
+
+// ─── Auth: Email Verification, Password Reset ──────────────────────────────
+
+export async function verifyEmailApi(token: string): Promise<{ verified: boolean }> {
+  const res = await fetch(`${BACKEND_URL}/v1/auth/verify-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) throw new Error("Email verification failed");
+  const body = (await res.json()) as ApiEnvelope<{ verified: boolean }>;
+  return body.data;
+}
+
+export async function forgotPasswordApi(email: string): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/v1/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error((body as { message?: string } | null)?.message ?? "Request failed");
+  }
+}
+
+export async function resetPasswordApi(token: string, newPassword: string): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/v1/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, newPassword }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error((body as { message?: string } | null)?.message ?? "Password reset failed");
+  }
+}
+
+// ─── Auth Providers API ─────────────────────────────────────────────────────
+
+export interface AuthProviders {
+  github: boolean;
+  google: boolean;
+}
+
+export async function fetchAuthProviders(): Promise<AuthProviders | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/auth/providers`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<AuthProviders>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
