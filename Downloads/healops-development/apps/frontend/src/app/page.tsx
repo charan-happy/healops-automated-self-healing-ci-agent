@@ -354,7 +354,7 @@ function BetaSignupForm() {
 
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"}/v1/healops/beta/signup`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000"}/v1/healops/beta/signup`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

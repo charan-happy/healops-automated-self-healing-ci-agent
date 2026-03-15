@@ -51,7 +51,7 @@ export default function RepairJobsPage() {
   useEffect(() => {
     async function load() {
       const data = await fetchRecentJobs(50);
-      setJobs(data ?? DEMO_JOBS);
+      setJobs(data ?? []);
       setLoading(false);
     }
     load();

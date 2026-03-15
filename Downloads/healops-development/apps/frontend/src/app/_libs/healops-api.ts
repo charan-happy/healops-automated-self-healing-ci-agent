@@ -80,6 +80,34 @@ export async function logoutApi(): Promise<void> {
   }).catch(() => {});
 }
 
+// ─── Invitation API ──────────────────────────────────────────────────────────
+
+export async function acceptInvitation(
+  token: string,
+): Promise<{ accepted: boolean; organizationName: string } | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/invitations/accept`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(
+        (body as { message?: string } | null)?.message ?? "Failed to accept invitation",
+      );
+    }
+    const body = (await res.json()) as ApiEnvelope<{
+      accepted: boolean;
+      organizationName: string;
+    }>;
+    return body.data ?? null;
+  } catch (err) {
+    if (err instanceof Error) throw err;
+    return null;
+  }
+}
+
 export async function createCheckoutSession(
   planSlug: string,
   successUrl: string,

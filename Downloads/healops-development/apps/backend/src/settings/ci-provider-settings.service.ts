@@ -228,7 +228,7 @@ export class CiProviderSettingsService {
         },
       };
     } catch (err) {
-      this.logger.warn(`Failed to list repos for config ${configId}: ${(err as Error).message}`);
+      this.logger.warn(`Failed to list repos for config ${configId}: ${err instanceof Error ? err.message : String(err)}`);
       return {
         provider: config.providerType,
         providerConfigId: config.id,

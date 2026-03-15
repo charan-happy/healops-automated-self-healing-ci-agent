@@ -152,7 +152,7 @@ export class DashboardService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed to compute metrics for period ${startDate}-${endDate}: ${(error as Error).message}`,
+        `Failed to compute metrics for period ${startDate}-${endDate}: ${error instanceof Error ? error.message : String(error)}`,
       );
       return { mttr: 0, successRate: 0, totalFixes: 0, costSavings: 0 };
     }
@@ -230,7 +230,7 @@ export class DashboardService {
         total,
       };
     } catch (error) {
-      this.logger.error(`Failed to get recent jobs: ${(error as Error).message}`);
+      this.logger.error(`Failed to get recent jobs: ${error instanceof Error ? error.message : String(error)}`);
       return { data: [], total: 0 };
     }
   }
@@ -281,7 +281,7 @@ export class DashboardService {
         };
       });
     } catch (error) {
-      this.logger.error(`Failed to get trends: ${(error as Error).message}`);
+      this.logger.error(`Failed to get trends: ${error instanceof Error ? error.message : String(error)}`);
       return [];
     }
   }
@@ -321,7 +321,7 @@ export class DashboardService {
         };
       });
     } catch (error) {
-      this.logger.error(`Failed to get cost breakdown: ${(error as Error).message}`);
+      this.logger.error(`Failed to get cost breakdown: ${error instanceof Error ? error.message : String(error)}`);
       return [];
     }
   }

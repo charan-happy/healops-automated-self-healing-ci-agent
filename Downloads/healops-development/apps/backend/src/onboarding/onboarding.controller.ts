@@ -2,7 +2,7 @@
 // Multi-step onboarding flow: create organization, configure CI provider,
 // select repositories, and configure LLM.
 
-import { Controller, Post, Get, Body, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Body, BadRequestException, Logger } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RouteNames } from '@common/route-names';
 import { CurrentUser } from '@auth/decorators/current-user.decorator';
@@ -17,6 +17,8 @@ import { MembershipRepository } from '@db/repositories/healops/membership.reposi
 @Controller({ path: RouteNames.HEALOPS_ONBOARDING, version: '1' })
 @ApiTags('Onboarding')
 export class OnboardingController {
+  private readonly logger = new Logger(OnboardingController.name);
+
   constructor(
     private readonly onboardingService: OnboardingService,
     private readonly membershipRepository: MembershipRepository,
@@ -104,8 +106,11 @@ export class OnboardingController {
     try {
       const orgId = await this.resolveOrganizationId(user.id);
       return this.onboardingService.getOnboardingStatus(orgId, user.id);
-    } catch {
+    } catch (err) {
       // New user with no organization yet — return default onboarding state
+      if (!(err instanceof BadRequestException)) {
+        this.logger.warn(`Unexpected error in getOnboardingStatus: ${err instanceof Error ? err.message : String(err)}`);
+      }
       return {
         currentStep: 'create_organization',
         completedSteps: [],

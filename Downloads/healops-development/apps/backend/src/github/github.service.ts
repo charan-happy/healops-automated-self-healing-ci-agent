@@ -271,9 +271,8 @@ export class GithubService {
       const zip = new AdmZip(buffer);
       const entries = zip.getEntries();
 
-      // DEBUG: Log all zip entry names so we can see the exact structure
       const entryNames = entries.filter((e: AdmZip.IZipEntry) => !e.isDirectory).map((e: AdmZip.IZipEntry) => e.entryName);
-      this.logger.log(`[ZIP ENTRIES] ${JSON.stringify(entryNames)}`);
+      this.logger.debug(`[ZIP ENTRIES] ${JSON.stringify(entryNames)}`);
 
       const SKIP_PATTERNS = /set.up.job|checkout|setup.node|setup.python|setup.go|cache|install.depend|npm.install|pnpm.install|yarn.install|post.run|complete.job/i;
       const BUILD_PATTERNS = /build|compile|type.?check|lint|test|jest|vitest|pytest|make|tsc|next|webpack|vite|turbo|nx/i;

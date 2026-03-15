@@ -10,10 +10,14 @@ import { AuthUser } from '../interfaces/auth-user.interface';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(configService: ConfigService<EnvConfig>) {
+    const secret = configService.get<string>('JWT_SECRET');
+    if (!secret) {
+      throw new Error('JWT_SECRET environment variable is not set. Authentication will not work.');
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') ?? '',
+      secretOrKey: secret,
     });
   }
 
@@ -21,8 +25,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     return {
       id: payload.sub,
       email: payload.email,
-      roles: payload.roles,
-      permissions: payload.permissions,
+      roles: payload.roles ?? [],
+      permissions: payload.permissions ?? [],
     };
   }
 }

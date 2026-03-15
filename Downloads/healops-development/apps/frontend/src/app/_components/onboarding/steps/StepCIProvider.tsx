@@ -123,20 +123,35 @@ export function StepCIProvider({ data, onUpdate }: Props) {
           </p>
 
           {entry.type === "github" && (
-            <div className="rounded-lg border border-brand-cyan/20 bg-brand-cyan/5 p-4">
-              <p className="text-sm">
-                Click the button below to install the HealOps GitHub App on your
-                organization.
-              </p>
-              <a
-                href={`https://github.com/apps/healops-dev/installations/new`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-brand-cyan px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-brand-cyan/90"
-              >
-                Install GitHub App
-                <ExternalLink className="size-3.5" />
-              </a>
+            <div className="space-y-3">
+              <div className="rounded-lg border border-brand-cyan/20 bg-brand-cyan/5 p-4">
+                <p className="text-sm">
+                  Click the button below to install the HealOps GitHub App on your
+                  organization. The Installation ID will be captured automatically.
+                </p>
+                <a
+                  href={`https://github.com/apps/healops-dev/installations/new`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-brand-cyan px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-brand-cyan/90"
+                >
+                  Install GitHub App
+                  <ExternalLink className="size-3.5" />
+                </a>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">
+                  Installation ID
+                  <span className="ml-1 text-xs text-muted-foreground">(from GitHub redirect or App settings)</span>
+                </label>
+                <input
+                  type="text"
+                  value={getConfig("github").githubInstallationId ?? ""}
+                  onChange={(e) => setConfig("github", "githubInstallationId", e.target.value)}
+                  placeholder="e.g. 12345678"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-brand-cyan/50"
+                />
+              </div>
             </div>
           )}
 

@@ -73,6 +73,10 @@ export class CiWebhookController {
     // 1. Verify signature
     const provider = this.ciProviderFactory.getProvider('github');
     const secret = this.configService.get<string>('GITHUB_WEBHOOK_SECRET') ?? '';
+    if (!secret) {
+      this.logger.error('GITHUB_WEBHOOK_SECRET is not configured — webhook signature cannot be verified');
+      throw new UnauthorizedException('Webhook secret not configured');
+    }
     if (!provider.verifyWebhookSignature(rawBody.toString('utf8'), signature, secret)) {
       throw new UnauthorizedException('Invalid webhook signature');
     }

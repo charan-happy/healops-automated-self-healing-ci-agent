@@ -251,7 +251,8 @@ export default function CIProvidersPage() {
               <div className="space-y-4">
                 <div className="rounded-lg border border-brand-cyan/20 bg-brand-cyan/5 p-4">
                   <p className="text-sm">
-                    Install the HealOps GitHub App on your organization.
+                    Install the HealOps GitHub App on your organization. The Installation ID
+                    will be captured automatically, or you can enter it manually below.
                   </p>
                   <a
                     href="https://github.com/apps/healops-dev/installations/new"
@@ -262,6 +263,19 @@ export default function CIProvidersPage() {
                     Install GitHub App
                     <ExternalLink className="size-3.5" />
                   </a>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Installation ID</label>
+                  <input
+                    type="text"
+                    value={configFields.installationId ?? ""}
+                    onChange={(e) => setConfigFields({ ...configFields, installationId: e.target.value })}
+                    placeholder="e.g. 12345678"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-brand-cyan/50"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Found in your GitHub App settings or in the redirect URL after installation.
+                  </p>
                 </div>
                 <div className="flex justify-end gap-3">
                   <button

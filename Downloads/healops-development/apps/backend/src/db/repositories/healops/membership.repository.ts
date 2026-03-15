@@ -4,7 +4,7 @@ import {
   organizationMembers,
   organizationInvitations,
 } from '../../schema/membership';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 
 @Injectable()
 export class MembershipRepository {
@@ -43,7 +43,8 @@ export class MembershipRepository {
     return this.dbService.db
       .select()
       .from(organizationMembers)
-      .where(eq(organizationMembers.userId, userId));
+      .where(eq(organizationMembers.userId, userId))
+      .orderBy(desc(organizationMembers.createdAt));
   }
 
   async findMemberRole(organizationId: string, userId: string) {

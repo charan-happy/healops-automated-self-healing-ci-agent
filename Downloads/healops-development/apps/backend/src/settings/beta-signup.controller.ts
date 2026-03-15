@@ -2,9 +2,10 @@
 // Collects early beta signups and stores in audit_log.
 // Public endpoint — no auth required.
 
-import { Controller, Post, Get, Body, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Body, Logger, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { HealopsAuditLogRepository } from '@db/repositories/healops/audit-log.repository';
 import { randomUUID } from 'crypto';
 
@@ -50,6 +51,7 @@ export class BetaSignupController {
   }
 
   @Get('signups')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'List beta signups (admin only)' })
   async listSignups() {
     const logs = await this.auditLogRepository.findByAction('beta.signup');
