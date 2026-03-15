@@ -214,42 +214,42 @@ jobs:
 
             pm2 list | grep healops
 
-      - name: Notify Slack (Deploy Success)
-        if: success()
-        uses: slackapi/slack-github-action@v1.24.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        with:
-          payload: |
-            {
-              "text": "Deploy Success",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Deploy to OCI - SUCCESS*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*Branch:* `${{ github.ref_name }}`"
-                  }
-                }
-              ]
-            }
+      # - name: Notify Slack (Deploy Success)
+      #   if: success()
+      #   uses: slackapi/slack-github-action@v1.24.0
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "Deploy Success",
+      #         "blocks": [
+      #           {
+      #             "type": "section",
+      #             "text": {
+      #               "type": "mrkdwn",
+      #               "text": "*Deploy to OCI - SUCCESS*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*Branch:* `${{ github.ref_name }}`"
+      #             }
+      #           }
+      #         ]
+      #       }
 
-      - name: Notify Slack (Deploy Failure)
-        if: failure()
-        uses: slackapi/slack-github-action@v1.24.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        with:
-          payload: |
-            {
-              "text": "Deploy Failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Deploy to OCI - FAILED (auto-rollback)*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*View:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Workflow Run>"
-                  }
-                }
-              ]
-            }
+      # - name: Notify Slack (Deploy Failure)
+      #   if: failure()
+      #   uses: slackapi/slack-github-action@v1.24.0
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "Deploy Failed",
+      #         "blocks": [
+      #           {
+      #             "type": "section",
+      #             "text": {
+      #               "type": "mrkdwn",
+      #               "text": "*Deploy to OCI - FAILED (auto-rollback)*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*View:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Workflow Run>"
+      #             }
+      #           }
+      #         ]
+      #       }
