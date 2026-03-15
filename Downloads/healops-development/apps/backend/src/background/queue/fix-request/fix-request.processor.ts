@@ -131,7 +131,7 @@ export class FixRequestProcessor extends WorkerHost {
     let branchCreated = false;
 
     if (hasRepoContext) {
-      agentBranch = `agent-fix/${branch}`;
+      agentBranch = `healops/fix/${pipelineRunId}`;
       this.logger.log(
         `[BATCH_FIX_REQUEST] Creating branch ${agentBranch} from ${commitSha.slice(0, 8)} ` +
           `(installationId=${githubInstallationId}, owner=${owner}, repo=${repo})`,
