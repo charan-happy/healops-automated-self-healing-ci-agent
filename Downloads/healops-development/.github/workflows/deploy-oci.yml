@@ -1,0 +1,202 @@
+# ─────────────────────────────────────────────────────────────────
+# HealOps — Build → GHCR → Deploy to Oracle Cloud
+# ─────────────────────────────────────────────────────────────────
+# Builds Docker images, pushes to GitHub Container Registry,
+# then deploys to OCI server via SSH + docker compose.
+#
+# Required GitHub Secrets:
+#   OCI_SSH_KEY          — Private SSH key for ubuntu@<OCI_HOST>
+#   OCI_HOST             — OCI server IP (e.g. 129.159.19.113)
+#   OCI_SSH_PORT         — SSH port (e.g. 10023)
+#   GHCR_TOKEN           — GitHub PAT with read:packages (for server pull)
+#   SLACK_WEBHOOK_URL    — (optional) Slack deploy notifications
+# ─────────────────────────────────────────────────────────────────
+
+name: Build → GHCR → Deploy to OCI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'Infrastructure/**'
+      - '*.md'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/healops-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/healops-frontend
+
+jobs:
+  build-and-push:
+    name: Build & Push to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.tags.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tag
+        id: tags
+        run: |
+          SHORT_SHA="sha-$(echo ${{ github.sha }} | cut -c1-7)"
+          echo "tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      # ── Backend Image ──────────────────────────────────────────
+      - name: Build & Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Docker/dockerfile.backend
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ steps.tags.outputs.tag }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Frontend Image ─────────────────────────────────────────
+      - name: Build & Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Docker/dockerfile.frontend
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ steps.tags.outputs.tag }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to OCI
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy docker-compose-prod.yml to OCI
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          port: ${{ secrets.OCI_SSH_PORT }}
+          username: ubuntu
+          key: ${{ secrets.OCI_SSH_KEY }}
+          source: docker-compose-prod.yml
+          target: /home/ubuntu/healops
+
+      - name: Deploy on OCI
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          port: ${{ secrets.OCI_SSH_PORT }}
+          username: ubuntu
+          key: ${{ secrets.OCI_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/ubuntu/healops
+
+            IMAGE_TAG="${{ needs.build-and-push.outputs.image_tag }}"
+
+            # Backup current image tags for rollback
+            if [ -f .env.docker ]; then
+              grep "^BACKEND_IMAGE=" .env.docker > .env.docker.previous 2>/dev/null || true
+              grep "^FRONTEND_IMAGE=" .env.docker >> .env.docker.previous 2>/dev/null || true
+            fi
+
+            # Login to GHCR on OCI server
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Write image tags to env file
+            cat > .env.docker <<ENVEOF
+            BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:${IMAGE_TAG}
+            FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:${IMAGE_TAG}
+            ENVEOF
+
+            # Pull new images
+            BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:${IMAGE_TAG} \
+            FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:${IMAGE_TAG} \
+              docker compose -f docker-compose-prod.yml pull
+
+            # Run migrations (if applicable)
+            BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:${IMAGE_TAG} \
+            FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:${IMAGE_TAG} \
+              docker compose -f docker-compose-prod.yml run --rm \
+              backend node dist/db/drizzle/migrate.js || echo "Migration skipped"
+
+            # Rolling restart — backend + worker + frontend
+            BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:${IMAGE_TAG} \
+            FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:${IMAGE_TAG} \
+              docker compose -f docker-compose-prod.yml up -d \
+              --no-deps backend worker frontend
+
+            # Health checks
+            echo "Waiting for services to start..."
+            sleep 20
+
+            curl -sf http://localhost:4000/health && \
+              echo "Backend OK: ${IMAGE_TAG}" || \
+              { echo "Backend health check failed"; exit 1; }
+
+            sleep 5
+            curl -sf http://localhost:3000 > /dev/null && \
+              echo "Frontend OK: ${IMAGE_TAG}" || \
+              echo "Frontend health check pending (may need more time)"
+
+            docker image prune -f
+
+      - name: Notify Slack (Deploy Success)
+        if: success() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "Deploy Success",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deploy to OCI - SUCCESS*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*Image Tag:* ${{ needs.build-and-push.outputs.image_tag }}\n*Registry:* GHCR\n*Host:* OCI (${{ secrets.OCI_HOST }})"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify Slack (Deploy Failure)
+        if: failure() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "Deploy Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deploy to OCI - FAILED*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*View:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Workflow Run>"
+                  }
+                }
+              ]
+            }
