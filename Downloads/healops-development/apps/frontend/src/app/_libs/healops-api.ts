@@ -524,3 +524,250 @@ export async function fetchAuthProviders(): Promise<AuthProviders | null> {
     return null;
   }
 }
+
+export async function resendVerificationApi(email: string): Promise<void> {
+  await fetch(`${BACKEND_URL}/v1/auth/resend-verification`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+}
+
+// ─── Demo Mode ──────────────────────────────────────────────────────────────
+
+export function isDemoMode(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem("healops_refresh_token") === "demo-refresh";
+}
+
+// ─── Projects API ───────────────────────────────────────────────────────────
+
+export interface ProjectResponse {
+  id: string;
+  name: string;
+  repo: string;
+  provider: string;
+  branchCount: number;
+  defaultBranch: string;
+  lastActivity: string | null;
+}
+
+export interface BranchResponse {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  author: string | null;
+  commitCount: number;
+  lastCommit: string | null;
+  pipelineStatus: string;
+}
+
+export interface CommitResponse {
+  id: string;
+  sha: string;
+  fullSha: string;
+  message: string;
+  author: string;
+  timestamp: string;
+  source: string;
+  pipelineStatus: string;
+  agentFixCount: number;
+}
+
+export interface CommitDetailResponse {
+  sha: string;
+  message: string;
+  author: { name: string; email: string; date: string };
+  files: Array<{ filename: string; status: string; additions: number; deletions: number; patch?: string }>;
+}
+
+export interface ProviderPipelineRun {
+  id: string;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  url: string;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface RepoCiLink {
+  id: string;
+  repositoryId: string;
+  ciProviderConfigId: string;
+  ciProviderType: string;
+  displayName: string | null;
+  isActive: boolean;
+}
+
+export interface ProviderJob {
+  id: string;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface ScmAvailableRepo {
+  externalRepoId: string;
+  name: string;
+  fullName: string;
+  defaultBranch: string;
+  language: string | null;
+  isPrivate: boolean;
+  url: string;
+}
+
+export interface AgentStep {
+  id: string;
+  name: string;
+  status: "pending" | "running" | "completed" | "failed" | "skipped";
+  startedAt: string | null;
+  completedAt: string | null;
+  output: string | null;
+  error: string | null;
+}
+
+export interface ScmProviderConfig {
+  id: string;
+  providerType: string;
+  displayName: string | null;
+  isActive: boolean;
+  hasToken: boolean;
+  createdAt: string;
+}
+
+export async function fetchProjectsList(): Promise<ProjectResponse[] | null> {
+  return fetchApi<ProjectResponse[]>("/v1/healops/projects");
+}
+
+export async function fetchProjectBranches(
+  repositoryId: string,
+  sync?: boolean,
+): Promise<BranchResponse[] | null> {
+  const q = sync ? "?sync=true" : "";
+  return fetchApi<BranchResponse[]>(`/v1/healops/projects/${repositoryId}/branches${q}`);
+}
+
+export async function fetchBranchCommits(
+  repositoryId: string,
+  branchId: string,
+  limit = 50,
+  offset = 0,
+): Promise<CommitResponse[] | null> {
+  return fetchApi<CommitResponse[]>(
+    `/v1/healops/projects/${repositoryId}/branches/${branchId}/commits?limit=${limit}&offset=${offset}`,
+  );
+}
+
+export async function fetchCommitDetailFromBackend(
+  repositoryId: string,
+  commitSha: string,
+): Promise<CommitDetailResponse | null> {
+  return fetchApi<CommitDetailResponse>(
+    `/v1/healops/projects/${repositoryId}/commits/${commitSha}`,
+  );
+}
+
+export async function fetchProjectPipelines(
+  repositoryId: string,
+  branch?: string,
+): Promise<ProviderPipelineRun[] | null> {
+  const q = branch ? `?branch=${encodeURIComponent(branch)}` : "";
+  return fetchApi<ProviderPipelineRun[]>(`/v1/healops/projects/${repositoryId}/pipelines${q}`);
+}
+
+export async function addRepositoriesToOrg(
+  repositories: Array<{ externalRepoId: string; name: string; defaultBranch?: string; provider?: string; scmProviderConfigId?: string }>,
+): Promise<unknown> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/add`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ repositories }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<unknown>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchRepoCiLinks(repositoryId: string): Promise<RepoCiLink[] | null> {
+  return fetchApi<RepoCiLink[]>(`/v1/healops/projects/${repositoryId}/ci-links`);
+}
+
+export async function addRepoCiLink(
+  repositoryId: string,
+  ciProviderConfigId: string,
+): Promise<RepoCiLink | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/${repositoryId}/ci-links`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ ciProviderConfigId }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<RepoCiLink>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateRepoCiLink(
+  repositoryId: string,
+  linkId: string,
+  data: { isActive?: boolean },
+): Promise<RepoCiLink | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/${repositoryId}/ci-links/${linkId}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<RepoCiLink>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function removeRepoCiLink(repositoryId: string, linkId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/projects/${repositoryId}/ci-links/${linkId}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchCiProviderJobs(
+  providerConfigId: string,
+  owner: string,
+  repo: string,
+): Promise<ProviderJob[] | null> {
+  return fetchApi<ProviderJob[]>(
+    `/v1/healops/settings/ci-providers/${providerConfigId}/jobs?owner=${owner}&repo=${repo}`,
+  );
+}
+
+// ─── SCM Provider Settings API ──────────────────────────────────────────────
+
+export async function fetchScmProviders(): Promise<ScmProviderConfig[] | null> {
+  return fetchApi<ScmProviderConfig[]>("/v1/healops/settings/scm-providers");
+}
+
+export async function fetchScmAvailableRepos(
+  providerConfigId: string,
+): Promise<ScmAvailableRepo[] | null> {
+  return fetchApi<ScmAvailableRepo[]>(
+    `/v1/healops/settings/scm-providers/${providerConfigId}/repos`,
+  );
+}
