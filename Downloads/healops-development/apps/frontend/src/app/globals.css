@@ -301,9 +301,9 @@
 /* ============================= */
 
 .glass {
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .gradient-border {
@@ -345,7 +345,7 @@
 .bg-ambient-glow::before,
 .bg-ambient-glow::after {
   content: "";
-  position: fixed;
+  position: absolute;
   border-radius: 50%;
   pointer-events: none;
   z-index: 0;
@@ -413,9 +413,9 @@
 .skeleton {
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.04) 25%,
-    rgba(255, 255, 255, 0.08) 50%,
-    rgba(255, 255, 255, 0.04) 75%
+    color-mix(in srgb, var(--foreground) 4%, transparent) 25%,
+    color-mix(in srgb, var(--foreground) 8%, transparent) 50%,
+    color-mix(in srgb, var(--foreground) 4%, transparent) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;

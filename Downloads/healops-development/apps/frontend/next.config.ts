@@ -7,6 +7,7 @@ import withBundleAnalyzer from "@next/bundle-analyzer";
 import { env } from "env";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,

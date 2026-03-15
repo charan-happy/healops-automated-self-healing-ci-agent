@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./dist",
+    "paths": {
+      "@common/*": ["common/*"],
+      "@middlewares/*": ["middlewares/*"],
+      "@interceptors/*": ["interceptors/*"],
+      "@config/*": ["config/*"],
+      "@logger/*": ["logger/*"],
+      "@db/*": ["db/*"],
+      "@redis/*": ["redis/*"],
+      "@otel/*": ["otel/*"],
+      "@bg/constants/job.constant": ["background/constants/job.constant"],
+      "@bg/constants/*": ["background/constants/*"],
+      "@bg/*": ["background/*"],
+      "@cron/*": ["background/cron/*"],
+      "@email-queue/*": ["background/queue/email/*"],
+      "@notification-queue/*": ["background/queue/notification/*"],
+      "@dead-letter-queue/*": ["background/queue/dead-letter/*"],
+      "@metrics/*": ["api/metrics/*"],
+      "@health/*": ["api/health/*"],
+      "@auth/*": ["auth/*"],
+      "@users/*": ["users/*"],
+      "@media/*": ["media/*"],
+      "@email/*": ["email/*"],
+      "@sms/*": ["sms/*"],
+      "@notifications/*": ["notifications/*"],
+      "@ai/*": ["ai/*"],
+      "@schema/*": ["db/schema/*"],
+      "@github-webhook/*": ["github-webhook/*"],
+      "@repair-jobs/*": ["repair-jobs/*"],
+      "@repair-agent/*": ["repair-agent/*"],
+      "@github/*": ["github/*"],
+      "@validator/*": ["validator/*"],
+      "@slack/*": ["slack/*"],
+      "@vector-memory/*": ["vector-memory/*"],
+      "@cost-tracking/*": ["cost-tracking/*"]
+    }
+  }
+}

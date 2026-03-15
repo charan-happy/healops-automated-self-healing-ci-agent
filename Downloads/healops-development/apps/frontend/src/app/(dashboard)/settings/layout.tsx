@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Building2,
   GitBranch,
+  FolderGit2,
   Cpu,
   CreditCard,
   Bell,
@@ -14,6 +15,7 @@ import {
 const tabs = [
   { href: "/settings/organization" as const, label: "Organization", icon: Building2 },
   { href: "/settings/ci-providers" as const, label: "CI Providers", icon: GitBranch },
+  { href: "/settings/scm-providers" as const, label: "SCM Providers", icon: FolderGit2 },
   { href: "/settings/ai-config" as const, label: "AI Config", icon: Cpu },
   { href: "/settings/billing" as const, label: "Billing", icon: CreditCard },
   { href: "/settings/notifications" as const, label: "Notifications", icon: Bell },

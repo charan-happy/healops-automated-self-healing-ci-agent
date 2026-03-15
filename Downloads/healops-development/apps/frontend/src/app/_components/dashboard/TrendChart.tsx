@@ -35,7 +35,7 @@ export function TrendChart({ data, loading, onPeriodChange }: TrendChartProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-card/50 p-6 backdrop-blur-xl transition-all hover:border-white/[0.12]">
+    <div className="min-w-0 rounded-2xl border border-white/[0.08] bg-card/50 p-6 backdrop-blur-xl transition-all hover:border-white/[0.12]">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Repair Trends</h3>
@@ -63,7 +63,8 @@ export function TrendChart({ data, loading, onPeriodChange }: TrendChartProps) {
       {loading || !data ? (
         <div className="h-64 animate-pulse rounded-lg bg-white/5" />
       ) : (
-        <ResponsiveContainer width="100%" height={340}>
+        <div className="h-[340px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={data}
             margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
@@ -128,6 +129,7 @@ export function TrendChart({ data, loading, onPeriodChange }: TrendChartProps) {
             />
           </AreaChart>
         </ResponsiveContainer>
+        </div>
       )}
     </div>
   );

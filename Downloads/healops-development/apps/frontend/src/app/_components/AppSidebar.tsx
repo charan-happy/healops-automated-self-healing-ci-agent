@@ -15,7 +15,13 @@ import {
   Key,
   Cpu,
   GitBranch,
-  Zap,
+  Activity,
+  BarChart3,
+  Database,
+  ListTodo,
+  Search,
+  FileCode,
+  ExternalLink,
 } from "lucide-react";
 import {
   Sidebar,
@@ -43,10 +49,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useOrg } from "@/app/_libs/context/OrgContext";
 import { useAuth } from "@/app/_libs/context/AuthContext";
 import { GeekyAntsBadge } from "@/app/_components/PoweredByGeekyAnts";
+import { HealOpsLogo } from "@/app/_components/HealOpsLogo";
 
 const settingsSubItems = [
   { title: "Organization", href: "/settings/organization" as const, icon: Building2 },
   { title: "CI Providers", href: "/settings/ci-providers" as const, icon: GitBranch },
+  { title: "SCM Providers", href: "/settings/scm-providers" as const, icon: FolderGit2 },
   { title: "AI Config", href: "/settings/ai-config" as const, icon: Cpu },
   { title: "Billing", href: "/settings/billing" as const, icon: CreditCard },
   { title: "Notifications", href: "/settings/notifications" as const, icon: Bell },
@@ -71,9 +79,13 @@ export function AppSidebar() {
   const { onboardingStatus, subscription } = useOrg();
   const { user, logout } = useAuth();
 
-  const orgName =
-    (onboardingStatus?.data?.organization as { name?: string } | undefined)
-      ?.name ?? "My Org";
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "/api";
+  // Derive host for observability links — use window.location in browser, fallback for SSR
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const baseHost = typeof window !== "undefined" ? window.location.hostname : "localhost";
+  const proto = typeof window !== "undefined" ? window.location.protocol : "http:";
+
+  const orgName = onboardingStatus?.organization?.name ?? "My Org";
   const planName = subscription?.plan?.name ?? "Free Plan";
   const initials = orgName.slice(0, 2).toUpperCase();
 
@@ -84,9 +96,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard" className="!h-auto !py-3">
-                <div className="flex aspect-square size-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan to-brand-primary shadow-lg shadow-brand-cyan/20">
-                  <Zap className="size-5 text-white" />
-                </div>
+                <HealOpsLogo size={36} className="shrink-0 shadow-lg shadow-brand-cyan/20 rounded-xl" />
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-lg font-black tracking-tight text-gradient">
                     HealOps
@@ -99,7 +109,7 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <Separator className="bg-white/[0.06]" />
+        <Separator className="bg-border/30" />
       </SidebarHeader>
 
       <SidebarContent>
@@ -178,9 +188,35 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Observability</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {[
+                { title: "Grafana", href: process.env.NEXT_PUBLIC_GRAFANA_URL || `${proto}//grafana.healops.online`, icon: BarChart3, color: "text-emerald-400" },
+                { title: "Prometheus", href: process.env.NEXT_PUBLIC_PROMETHEUS_URL || `${proto}//prometheus.healops.online`, icon: Activity, color: "text-orange-400" },
+                { title: "Jaeger", href: process.env.NEXT_PUBLIC_JAEGER_URL || `${proto}//jaeger.healops.online`, icon: Search, color: "text-sky-400" },
+                { title: "BullMQ", href: `${proto}//bullmq.healops.online`, icon: ListTodo, color: "text-violet-400" },
+                { title: "Swagger", href: `${proto}//swagger.healops.online`, icon: FileCode, color: "text-cyan-400" },
+                { title: "Metrics", href: `${proto}//metrics.healops.online`, icon: Database, color: "text-amber-400" },
+              ].map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <a href={item.href} target="_blank" rel="noopener noreferrer">
+                      <item.icon className={`size-4 ${item.color}`} />
+                      <span>{item.title}</span>
+                      <ExternalLink className="ml-auto size-3 text-muted-foreground/50" />
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
-      <Separator className="bg-white/[0.06]" />
+      <Separator className="bg-border/30" />
       <SidebarFooter>
         <div className="flex justify-center py-1 group-data-[collapsible=icon]:hidden">
           <GeekyAntsBadge />
