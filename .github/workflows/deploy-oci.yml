@@ -140,17 +140,17 @@ jobs:
             cd "$DEPLOY_DIR"
 
             # Backend
-            pm2 start apps/backend/dist/main.js --name healops-backend \
+            NODE_ENV=production PORT=4000 TS_NODE_PROJECT=tsconfig.prod-paths.json \
+              pm2 start apps/backend/dist/main.js --name healops-backend \
               --node-args="-r tsconfig-paths/register" \
               --cwd "$DEPLOY_DIR/apps/backend" \
-              --env "NODE_ENV=production PORT=4000 TS_NODE_PROJECT=tsconfig.prod-paths.json" \
               2>&1 | tail -3
 
             # Worker
-            pm2 start apps/backend/dist/worker.main.js --name healops-worker \
+            NODE_ENV=production TS_NODE_PROJECT=tsconfig.prod-paths.json \
+              pm2 start apps/backend/dist/worker.main.js --name healops-worker \
               --node-args="-r tsconfig-paths/register" \
               --cwd "$DEPLOY_DIR/apps/backend" \
-              --env "NODE_ENV=production TS_NODE_PROJECT=tsconfig.prod-paths.json" \
               2>&1 | tail -3
 
             # Frontend — standalone server
@@ -164,25 +164,27 @@ jobs:
 
             pm2 save
 
-            # ── 8. Health checks ─────────────────────────────────────
-            echo "==> Waiting 30s for services to boot..."
-            sleep 30
+            # ── 8. Health checks (with retry) ─────────────────────────
+            echo "==> Waiting for services to boot..."
+            HEALTH_OK=false
 
-            HEALTH_OK=true
+            for attempt in 1 2 3; do
+              sleep 20
+              echo "  Health check attempt $attempt..."
+              BACKEND_OK=false
+              FRONTEND_OK=false
 
-            if curl -sf http://localhost:4000/health > /dev/null; then
-              echo "Backend: UP"
-            else
-              echo "Backend: DOWN"
-              HEALTH_OK=false
-            fi
+              curl -sf http://localhost:4000/health > /dev/null && BACKEND_OK=true
+              curl -sf http://localhost:3000 > /dev/null && FRONTEND_OK=true
 
-            if curl -sf http://localhost:3000 > /dev/null; then
-              echo "Frontend: UP"
-            else
-              echo "Frontend: DOWN"
-              HEALTH_OK=false
-            fi
+              echo "  Backend: $BACKEND_OK | Frontend: $FRONTEND_OK"
+
+              if [ "$BACKEND_OK" = true ] && [ "$FRONTEND_OK" = true ]; then
+                HEALTH_OK=true
+                echo "Both services UP!"
+                break
+              fi
+            done
 
             if [ "$HEALTH_OK" = false ]; then
               echo "Health check FAILED — rolling back..."
