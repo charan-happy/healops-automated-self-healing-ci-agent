@@ -793,3 +793,110 @@ export async function fetchScmAvailableRepos(
     `/v1/healops/settings/scm-providers/${providerConfigId}/repos`,
   );
 }
+
+// ─── Organization Settings API ──────────────────────────────────────────────
+
+export interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export async function fetchOrganization(): Promise<{
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  slackWebhookUrl: string | null;
+  createdAt: string;
+} | null> {
+  return fetchApi<{
+    id: string;
+    name: string;
+    slug: string;
+    plan: string;
+    slackWebhookUrl: string | null;
+    createdAt: string;
+  }>("/v1/healops/settings/organization");
+}
+
+export async function updateOrganization(
+  data: { name?: string; slackWebhookUrl?: string },
+): Promise<{ id: string; name: string; slug: string; slackWebhookUrl: string | null; updated: boolean } | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/organization`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<{ id: string; name: string; slug: string; slackWebhookUrl: string | null; updated: boolean }>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchMembers(): Promise<Array<{
+  id: string;
+  userId: string;
+  email: string;
+  name: string;
+  role: string;
+  joinedAt: string;
+}> | null> {
+  return fetchApi<Array<{
+    id: string;
+    userId: string;
+    email: string;
+    name: string;
+    role: string;
+    joinedAt: string;
+  }>>("/v1/healops/settings/organization/members");
+}
+
+export async function inviteMember(email: string, role = "member"): Promise<Invitation | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/organization/members/invite`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ email, role }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<Invitation>;
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function removeMember(userId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/organization/members/${userId}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchInvitations(): Promise<Invitation[] | null> {
+  return fetchApi<Invitation[]>("/v1/healops/settings/organization/invitations");
+}
+
+export async function revokeInvitation(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/v1/healops/settings/organization/invitations/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
