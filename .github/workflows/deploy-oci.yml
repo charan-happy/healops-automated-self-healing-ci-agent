@@ -128,7 +128,7 @@ jobs:
 
             # ── 6. Swap deploy ───────────────────────────────────────
             echo "==> Swapping deployment..."
-            pm2 stop all 2>/dev/null || true
+            pm2 delete all 2>/dev/null || true
 
             # Backup current deploy
             BACKUP_DIR="/home/ubuntu/healops-backup-$(date +%Y%m%d%H%M%S)"
@@ -139,23 +139,34 @@ jobs:
             echo "==> Starting PM2 services..."
             cd "$DEPLOY_DIR"
 
-            # Backend + Worker via ecosystem config
-            pm2 start ecosystem.config.js --env production 2>&1 | tail -5
+            # Backend
+            pm2 start apps/backend/dist/main.js --name healops-backend \
+              --node-args="-r tsconfig-paths/register" \
+              --cwd "$DEPLOY_DIR/apps/backend" \
+              --env "NODE_ENV=production PORT=4000 TS_NODE_PROJECT=tsconfig.prod-paths.json" \
+              2>&1 | tail -3
 
-            # Frontend — use standalone server if available
+            # Worker
+            pm2 start apps/backend/dist/worker.main.js --name healops-worker \
+              --node-args="-r tsconfig-paths/register" \
+              --cwd "$DEPLOY_DIR/apps/backend" \
+              --env "NODE_ENV=production TS_NODE_PROJECT=tsconfig.prod-paths.json" \
+              2>&1 | tail -3
+
+            # Frontend — standalone server
             if [ -f "apps/frontend/.next/standalone/apps/frontend/server.js" ]; then
               PORT=3000 pm2 start apps/frontend/.next/standalone/apps/frontend/server.js \
                 --name healops-frontend 2>&1 | tail -3
             else
               pm2 start "npx next start -p 3000" --name healops-frontend \
-                --cwd ./apps/frontend 2>&1 | tail -3
+                --cwd "$DEPLOY_DIR/apps/frontend" 2>&1 | tail -3
             fi
 
             pm2 save
 
             # ── 8. Health checks ─────────────────────────────────────
-            echo "==> Waiting for services..."
-            sleep 15
+            echo "==> Waiting 30s for services to boot..."
+            sleep 30
 
             HEALTH_OK=true
 
@@ -175,14 +186,17 @@ jobs:
 
             if [ "$HEALTH_OK" = false ]; then
               echo "Health check FAILED — rolling back..."
-              pm2 stop all 2>/dev/null || true
+              pm2 delete all 2>/dev/null || true
               rm -rf "$DEPLOY_DIR"
               mv "$BACKUP_DIR" "$DEPLOY_DIR"
               cd "$DEPLOY_DIR"
               pm2 start ecosystem.config.js --env production 2>/dev/null || true
-              PORT=3000 pm2 start apps/frontend/.next/standalone/apps/frontend/server.js \
-                --name healops-frontend 2>/dev/null || true
+              if [ -f "apps/frontend/.next/standalone/apps/frontend/server.js" ]; then
+                PORT=3000 pm2 start apps/frontend/.next/standalone/apps/frontend/server.js \
+                  --name healops-frontend 2>/dev/null || true
+              fi
               pm2 save
+              sleep 20
               echo "Rolled back to previous deploy"
               exit 1
             fi
