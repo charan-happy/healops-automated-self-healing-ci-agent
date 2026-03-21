@@ -70,8 +70,8 @@ function formatTimeAgo(dateStr: string | null): string {
 
 const DEMO_PROJECTS: Project[] = [
   ...mockProjects,
-  { id: "5", name: "healops-agent", repo: "geekyants/healops-agent", branchCount: 6, lastActivity: "5 min ago" },
-  { id: "6", name: "infra-config", repo: "geekyants/infra-config", branchCount: 4, lastActivity: "30 min ago" },
+  { id: "5", name: "healops-agent", repo: "healops/agent", branchCount: 6, lastActivity: "5 min ago" },
+  { id: "6", name: "infra-config", repo: "healops/infra-config", branchCount: 4, lastActivity: "30 min ago" },
 ];
 
 const DEMO_BRANCHES: Record<string, Branch[]> = {

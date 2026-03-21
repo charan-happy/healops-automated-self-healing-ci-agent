@@ -106,12 +106,6 @@ export default function LandingPage() {
         </Link>
         <div className="flex items-center gap-4">
           <Link
-            href="/pricing"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Pricing
-          </Link>
-          <Link
             href="/login"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
@@ -167,10 +161,10 @@ export default function LandingPage() {
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
             </Link>
             <Link
-              href="/pricing"
+              href="/login"
               className="flex items-center gap-1 rounded-xl border border-white/10 px-6 py-3.5 text-sm font-medium transition-all hover:bg-white/5"
             >
-              View Pricing
+              Sign In
               <ChevronRight className="size-4" />
             </Link>
           </div>
@@ -325,7 +319,6 @@ export default function LandingPage() {
             <span className="text-sm font-bold text-muted-foreground">HealOps</span>
           </div>
           <div className="flex items-center gap-6 text-xs text-muted-foreground">
-            <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
             <Link href="/login" className="hover:text-foreground transition-colors">Sign In</Link>
             <Link href="/register" className="hover:text-foreground transition-colors">Register</Link>
           </div>

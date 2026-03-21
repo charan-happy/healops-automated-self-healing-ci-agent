@@ -267,10 +267,6 @@ export default function LoginPage() {
             </button>
 
             <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground/60">
-              <Link href="/pricing" className="hover:text-foreground hover:underline">
-                Pricing
-              </Link>
-              <span>|</span>
               <a href="https://docs.healops.dev" target="_blank" rel="noopener noreferrer" className="hover:text-foreground hover:underline">
                 Docs
               </a>
