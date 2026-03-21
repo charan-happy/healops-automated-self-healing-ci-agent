@@ -69,6 +69,25 @@ export class OrganizationSettingsController {
     return this.service.inviteMember(orgId, user.id, body.email.trim(), body.role);
   }
 
+  @Get('invitations')
+  @ApiOperation({ summary: 'List pending invitations' })
+  @ApiResponse({ status: 200, description: 'Returns array of pending invitations' })
+  async listInvitations(@CurrentUser() user: AuthUser) {
+    const orgId = await this.resolveOrganizationId(user.id);
+    return this.service.listInvitations(orgId);
+  }
+
+  @Delete('invitations/:id')
+  @ApiOperation({ summary: 'Revoke an invitation' })
+  @ApiResponse({ status: 200, description: 'Invitation revoked' })
+  async revokeInvitation(
+    @CurrentUser() user: AuthUser,
+    @Param('id') invitationId: string,
+  ) {
+    await this.resolveOrganizationId(user.id);
+    return this.service.revokeInvitation(invitationId);
+  }
+
   @Delete('members/:userId')
   @ApiOperation({ summary: 'Remove a member from the organization' })
   @ApiResponse({ status: 200, description: 'Member removed' })

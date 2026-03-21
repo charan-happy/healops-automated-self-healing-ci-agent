@@ -77,6 +77,24 @@ export class OrganizationSettingsService {
     }));
   }
 
+  async listInvitations(orgId: string) {
+    const invitations = await this.membershipRepository.findPendingInvitations(orgId);
+    return invitations.map((inv) => ({
+      id: inv.id,
+      email: inv.email,
+      role: inv.role,
+      status: inv.status,
+      expiresAt: inv.expiresAt?.toISOString() ?? null,
+      createdAt: inv.createdAt?.toISOString() ?? null,
+    }));
+  }
+
+  async revokeInvitation(invitationId: string) {
+    await this.membershipRepository.revokeInvitation(invitationId);
+    this.logger.log(`Invitation ${invitationId} revoked`);
+    return { revoked: true };
+  }
+
   async inviteMember(orgId: string, invitedBy: string, email: string, role?: string) {
     const token = randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
