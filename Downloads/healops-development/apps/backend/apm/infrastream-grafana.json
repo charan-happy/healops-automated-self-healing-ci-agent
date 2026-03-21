@@ -639,7 +639,7 @@
         "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": { "displayMode": "list", "placement": "bottom" }
       }
-    }
+    },
     {
       "type": "row",
       "title": "User Analytics & Traffic",
