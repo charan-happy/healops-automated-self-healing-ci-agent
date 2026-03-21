@@ -2,7 +2,7 @@ name: Deploy to OCI
 
 on:
   push:
-    branches: [main]
+    branches: [main, development]
     paths-ignore:
       - 'Infrastructure/**'
       - '*.md'
