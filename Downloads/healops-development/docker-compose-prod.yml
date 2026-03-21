@@ -125,6 +125,9 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./apps/backend/apm/grafana/provisioning:/etc/grafana/provisioning
+      - ./apps/backend/apm/grafana.json:/etc/grafana/dashboards/healops/healops.json
+      - ./apps/backend/apm/infrastream-grafana.json:/etc/grafana/dashboards/infrastream/infrastream.json
     depends_on:
       - prometheus
     networks:
