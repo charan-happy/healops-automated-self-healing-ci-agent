@@ -49,7 +49,7 @@
       "title": "Events Ingestion Rate",
       "description": "Rate of events flowing through Kafka per second",
       "gridPos": { "x": 0, "y": 1, "w": 12, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "sum(rate(infrastream_events_total[$interval]))",
@@ -93,7 +93,7 @@
       "title": "Event Processing Latency (p50 / p90 / p99)",
       "description": "Histogram quantile latency of the event processing pipeline",
       "gridPos": { "x": 12, "y": 1, "w": 12, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum(rate(infrastream_processing_duration_seconds_bucket[$interval])) by (le))",
@@ -148,7 +148,7 @@
       "title": "Events by Type",
       "description": "Stacked breakdown of events: push, PR, deploy, incident, alert, build",
       "gridPos": { "x": 0, "y": 7, "w": 24, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "sum(increase(infrastream_events_total[$interval])) by (type)",
@@ -216,7 +216,7 @@
       "title": "DORA: Deployment Frequency",
       "description": "Deployments per day. Elite: >1/day, High: 1/week-1/day, Medium: 1/month-1/week, Low: <1/month",
       "gridPos": { "x": 0, "y": 15, "w": 6, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "infrastream_deployment_frequency",
@@ -254,7 +254,7 @@
       "title": "DORA: Lead Time for Changes",
       "description": "Hours from commit to production. Elite: <1h, High: <24h, Medium: <168h, Low: >168h",
       "gridPos": { "x": 6, "y": 15, "w": 6, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "infrastream_lead_time_hours",
@@ -292,7 +292,7 @@
       "title": "DORA: Change Failure Rate",
       "description": "Percentage of deployments causing failures. Elite: 0-15%, High: 16-30%, Medium: 31-45%, Low: >45%",
       "gridPos": { "x": 12, "y": 15, "w": 6, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "infrastream_change_failure_rate * 100",
@@ -330,7 +330,7 @@
       "title": "DORA: Mean Time to Recovery",
       "description": "Hours to restore service after failure. Elite: <1h, High: <24h, Medium: <168h, Low: >168h",
       "gridPos": { "x": 18, "y": 15, "w": 6, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "infrastream_mttr_hours",
@@ -375,7 +375,7 @@
       "title": "Active Incidents",
       "description": "Current number of unresolved incidents",
       "gridPos": { "x": 0, "y": 22, "w": 6, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "infrastream_active_incidents",
@@ -412,7 +412,7 @@
       "title": "Kafka Consumer Lag",
       "description": "Consumer group lag indicating processing backlog across partitions",
       "gridPos": { "x": 6, "y": 22, "w": 18, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "infrastream_kafka_consumer_lag",
@@ -455,7 +455,7 @@
       "title": "Total Events Processed (24h)",
       "description": "Total events processed in the last 24 hours",
       "gridPos": { "x": 0, "y": 27, "w": 6, "h": 3 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "sum(increase(infrastream_events_total[24h]))",
@@ -496,7 +496,7 @@
       "title": "PostgreSQL Query Duration",
       "description": "P50 / P90 / P99 latency of PostgreSQL queries",
       "gridPos": { "x": 0, "y": 31, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum(rate(infrastream_pg_query_duration_seconds_bucket[$interval])) by (le))",
@@ -551,7 +551,7 @@
       "title": "Valkey Cache Hit Rate",
       "description": "Ratio of cache hits to total lookups (hits + misses). Target: >90%",
       "gridPos": { "x": 12, "y": 31, "w": 6, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "(infrastream_valkey_cache_hits / (infrastream_valkey_cache_hits + infrastream_valkey_cache_misses)) * 100",
@@ -589,7 +589,7 @@
       "title": "HealOps Healing Events",
       "description": "Self-healing events triggered by HealOps, broken down by status (success, failed, in_progress)",
       "gridPos": { "x": 18, "y": 31, "w": 6, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "sum(rate(infrastream_healops_healing_total[$interval])) by (status)",
@@ -653,7 +653,7 @@
       "title": "Total Visitors (24h)",
       "description": "Unique visitors in the last 24 hours",
       "gridPos": { "x": 0, "y": 39, "w": 6, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "sum(increase(infrastream_http_requests_total[24h]))",
@@ -688,7 +688,7 @@
       "title": "Active Users (Now)",
       "description": "Currently active users on the platform",
       "gridPos": { "x": 6, "y": 39, "w": 6, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "infrastream_active_users",
@@ -724,7 +724,7 @@
       "title": "Concurrent Users (Peak)",
       "description": "Peak concurrent users in last 24h",
       "gridPos": { "x": 12, "y": 39, "w": 6, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "max_over_time(infrastream_concurrent_users[24h])",
@@ -760,7 +760,7 @@
       "title": "Unique Countries",
       "description": "Number of unique countries accessing the platform",
       "gridPos": { "x": 18, "y": 39, "w": 6, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "count(count by (country) (infrastream_requests_by_country))",
@@ -795,7 +795,7 @@
       "title": "Active Users Over Time",
       "description": "Number of active and concurrent users over time",
       "gridPos": { "x": 0, "y": 44, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "infrastream_active_users",
@@ -846,7 +846,7 @@
       "title": "Visitors by Country",
       "description": "Geographic distribution of platform visitors",
       "gridPos": { "x": 12, "y": 44, "w": 6, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "topk(10, sum by (country) (infrastream_requests_by_country))",
@@ -874,7 +874,7 @@
       "title": "Page Views by Route",
       "description": "HTTP requests broken down by page route",
       "gridPos": { "x": 18, "y": 44, "w": 6, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "sum(rate(infrastream_http_requests_total[$interval])) by (route)",
@@ -905,7 +905,7 @@
       "title": "Top 10 Countries by Requests",
       "description": "Countries with the most requests to the platform",
       "gridPos": { "x": 0, "y": 51, "w": 24, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
           "expr": "topk(10, sum by (country) (increase(infrastream_requests_by_country[24h])))",

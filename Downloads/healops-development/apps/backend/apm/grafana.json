@@ -17,7 +17,7 @@
       "type": "timeseries",
       "title": "Total API Requests Rate",
       "gridPos": { "x": 0, "y": 1, "w": 12, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "sum(rate(api_requests_total[1m]))", "legendFormat": "Requests/s", "format": "time_series" }
       ],
@@ -28,7 +28,7 @@
       "type": "timeseries",
       "title": "API Error Rate (5xx)",
       "gridPos": { "x": 12, "y": 1, "w": 12, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "sum(rate(api_request_errors_total[1m]))", "legendFormat": "Errors/s", "format": "time_series" }
       ],
@@ -46,7 +46,7 @@
       "type": "stat",
       "title": "Error Rate %",
       "gridPos": { "x": 0, "y": 7, "w": 4, "h": 4 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "(sum(rate(api_request_errors_total[5m])) / sum(rate(api_requests_total[5m]))) * 100", "format": "time_series" }
       ],
@@ -64,7 +64,7 @@
       "type": "stat",
       "title": "Concurrent Requests",
       "gridPos": { "x": 4, "y": 7, "w": 4, "h": 4 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "concurrent_http_requests", "format": "time_series" }
       ],
@@ -81,7 +81,7 @@
       "type": "stat",
       "title": "Active Users",
       "gridPos": { "x": 8, "y": 7, "w": 4, "h": 4 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "active_users_gauge", "format": "time_series" }
       ],
@@ -98,7 +98,7 @@
       "type": "stat",
       "title": "Total HTTP Requests",
       "gridPos": { "x": 12, "y": 7, "w": 4, "h": 4 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "total_http_requests", "format": "time_series" }
       ],
@@ -115,7 +115,7 @@
       "type": "stat",
       "title": "User Logins",
       "gridPos": { "x": 16, "y": 7, "w": 4, "h": 4 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "sum(increase(healops_user_logins_total[24h]))", "legendFormat": "24h", "format": "time_series" }
       ],
@@ -132,7 +132,7 @@
       "type": "stat",
       "title": "User Registrations",
       "gridPos": { "x": 20, "y": 7, "w": 4, "h": 4 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "sum(increase(healops_user_registrations_total[24h]))", "legendFormat": "24h", "format": "time_series" }
       ],
@@ -155,7 +155,7 @@
       "type": "timeseries",
       "title": "API Latency P90 / P99",
       "gridPos": { "x": 0, "y": 12, "w": 16, "h": 7 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "histogram_quantile(0.90, sum(rate(api_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P90", "format": "time_series" },
         { "expr": "histogram_quantile(0.99, sum(rate(api_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P99", "format": "time_series" }
@@ -168,7 +168,7 @@
       "type": "table",
       "title": "Slowest APIs (Top 5)",
       "gridPos": { "x": 16, "y": 12, "w": 8, "h": 7 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "topk(5, rate(api_request_duration_seconds_sum[5m]) / rate(api_request_duration_seconds_count[5m]))", "format": "table" }
       ]
@@ -184,7 +184,7 @@
       "type": "timeseries",
       "title": "User Logins Over Time",
       "gridPos": { "x": 0, "y": 20, "w": 12, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "sum(rate(healops_user_logins_total[5m]))", "legendFormat": "Logins/s", "format": "time_series" }
       ],
@@ -195,7 +195,7 @@
       "type": "timeseries",
       "title": "User Registrations Over Time",
       "gridPos": { "x": 12, "y": 20, "w": 12, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "sum(rate(healops_user_registrations_total[5m]))", "legendFormat": "Registrations/s", "format": "time_series" }
       ],
@@ -206,7 +206,7 @@
       "type": "timeseries",
       "title": "Active Users Over Time",
       "gridPos": { "x": 0, "y": 26, "w": 12, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "active_users_gauge", "legendFormat": "Active Users", "format": "time_series" }
       ],
@@ -217,7 +217,7 @@
       "type": "piechart",
       "title": "Browser Usage (Top 5)",
       "gridPos": { "x": 12, "y": 26, "w": 6, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "topk(5, api_requests_by_user_agent)", "format": "time_series" }
       ],
@@ -228,7 +228,7 @@
       "type": "piechart",
       "title": "Referer Domains (Top 5)",
       "gridPos": { "x": 18, "y": 26, "w": 6, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "topk(5, api_requests_by_referer)", "format": "time_series" }
       ],
@@ -245,7 +245,7 @@
       "type": "timeseries",
       "title": "Heap Memory Usage",
       "gridPos": { "x": 0, "y": 33, "w": 8, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "nodejs_heap_size_used_bytes", "legendFormat": "Used", "format": "time_series" },
         { "expr": "nodejs_heap_size_total_bytes", "legendFormat": "Total", "format": "time_series" }
@@ -257,7 +257,7 @@
       "type": "timeseries",
       "title": "Event Loop Lag",
       "gridPos": { "x": 8, "y": 33, "w": 8, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "nodejs_eventloop_lag_p50_seconds", "legendFormat": "P50", "format": "time_series" },
         { "expr": "nodejs_eventloop_lag_p90_seconds", "legendFormat": "P90", "format": "time_series" },
@@ -270,7 +270,7 @@
       "type": "timeseries",
       "title": "Process CPU Usage",
       "gridPos": { "x": 16, "y": 33, "w": 8, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "rate(process_cpu_seconds_total[1m])", "legendFormat": "CPU", "format": "time_series" },
         { "expr": "rate(process_cpu_user_seconds_total[1m])", "legendFormat": "User", "format": "time_series" },
@@ -283,7 +283,7 @@
       "type": "gauge",
       "title": "Resident Memory",
       "gridPos": { "x": 0, "y": 39, "w": 6, "h": 5 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "process_resident_memory_bytes", "format": "time_series" }
       ],
@@ -300,7 +300,7 @@
       "type": "stat",
       "title": "Open File Descriptors",
       "gridPos": { "x": 6, "y": 39, "w": 6, "h": 5 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "process_open_fds", "legendFormat": "Open FDs", "format": "time_series" },
         { "expr": "process_max_fds", "legendFormat": "Max FDs", "format": "time_series" }
@@ -313,7 +313,7 @@
       "type": "timeseries",
       "title": "GC Duration",
       "gridPos": { "x": 12, "y": 39, "w": 12, "h": 5 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "rate(nodejs_gc_duration_seconds_sum[5m])", "legendFormat": "GC Time", "format": "time_series" }
       ],
@@ -324,7 +324,7 @@
       "type": "piechart",
       "title": "Mobile vs Web Requests",
       "gridPos": { "x": 0, "y": 44, "w": 12, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "sum(total_web_requests)", "legendFormat": "Web" },
         { "expr": "sum(total_http_requests) - sum(total_web_requests)", "legendFormat": "Mobile/API" }
@@ -336,7 +336,7 @@
       "type": "stat",
       "title": "Backend Uptime",
       "gridPos": { "x": 12, "y": 44, "w": 6, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "time() - process_start_time_seconds", "format": "time_series" }
       ],
@@ -348,7 +348,7 @@
       "type": "stat",
       "title": "Node.js Version",
       "gridPos": { "x": 18, "y": 44, "w": 6, "h": 6 },
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
       "targets": [
         { "expr": "nodejs_version_info", "legendFormat": "v{{version}}", "format": "time_series" }
       ],
